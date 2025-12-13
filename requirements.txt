@@ -3,3 +3,6 @@ requests>=2.31.0
 Pillow>=10.0.0
 PyPDF2>=3.0.0
 pysnmp>=5.0.0
+pypandoc>=1.10.0
+reportlab>=4.0.0
+weasyprint>=59.0

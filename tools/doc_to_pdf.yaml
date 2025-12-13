@@ -1,0 +1,36 @@
+# 文档转PDF工具
+identity:
+  name: "doc_to_pdf"
+  author: "sumuxi"
+  label:
+    en_US: "Document to PDF"
+    zh_Hans: "文档转PDF"
+    pt_BR: "Documento para PDF"
+    ja_JP: "ドキュメントからPDFへ"
+description:
+  human:
+    en_US: "Convert documents to native PDF to avoid printing garbled characters"
+    zh_Hans: "将文档转换为原生PDF，避免打印乱码"
+    pt_BR: "Converter documentos para PDF nativo para evitar caracteres ilegíveis na impressão"
+    ja_JP: "文書をネイティブPDFに変換して、印刷時の文字化けを回避"
+  llm: "Convert documents to PDF to avoid printing garbled characters"
+parameters:
+  - name: document_url
+    type: string
+    required: true
+    label:
+      en_US: "Document URL"
+      zh_Hans: "文档URL"
+      pt_BR: "URL do Documento"
+      ja_JP: "ドキュメントURL"
+    human_description:
+      en_US: "URL of the document to convert, supporting md, doc, docx, txt formats"
+      zh_Hans: "要转换的文档URL，支持md、doc、docx、txt格式"
+      pt_BR: "URL do documento para converter, suportando formatos md, doc, docx, txt"
+      ja_JP: "変換するドキュメントのURL、md、doc、docx、txt形式をサポート"
+    llm_description: "URL of the document to convert, supporting md, doc, docx, txt formats"
+    form: llm
+extra:
+  python:
+    source: tools/doc_to_pdf.py
+    class: DocToPDFTool
