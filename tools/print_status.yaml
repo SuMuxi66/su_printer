@@ -1,0 +1,77 @@
+# 打印机状态查询工具
+identity:
+  name: "print_status"
+  author: "sumuxi"
+  label:
+    en_US: "Print Status"
+    zh_Hans: "查询打印机状态"
+    pt_BR: "Status da Impressora"
+    ja_JP: "プリンターステータス"
+description:
+  human:
+    en_US: "查询打印机的状态信息，包括墨粉余量、纸张状态、错误信息等"
+    zh_Hans: "查询打印机的状态信息，包括墨粉余量、纸张状态、错误信息等"
+    pt_BR: "Consulte informações de status da impressora, incluindo nível de toner, status de papel, mensagens de erro, etc."
+    ja_JP: "プリンターの状態情報、トナーレベル、用紙ステータス、エラーメッセージなどを確認します"
+  llm: "查询打印机的状态信息，包括墨粉余量、纸张状态、错误信息等"
+parameters:
+  - name: printer_ip
+    type: string
+    required: true
+    label:
+      en_US: Printer IP
+      zh_Hans: 打印机IP
+      pt_BR: IP da Impressora
+      ja_JP: プリンターIP
+    human_description:
+      en_US: "打印机的IP地址"
+      zh_Hans: "打印机的IP地址"
+      pt_BR: "Endereço IP da impressora"
+      ja_JP: "プリンターのIPアドレス"
+    llm_description: "打印机的IP地址"
+    form: llm
+  - name: printer_port
+    type: select
+    required: false
+    label:
+      en_US: Printer Port
+      zh_Hans: 打印机端口
+      pt_BR: Porta da Impressora
+      ja_JP: プリンターポート
+    human_description:
+      en_US: "打印机的端口号，默认自动检测"
+      zh_Hans: "打印机的端口号，默认自动检测"
+      pt_BR: "Número da porta da impressora, detecção automática por padrão"
+      ja_JP: "プリンターのポート番号、デフォルトで自動検出"
+    llm_description: "打印机的端口号，默认自动检测"
+    form: llm
+    default: 0
+    options:
+      - value: 0
+        label:
+          en_US: "自动检测"
+          zh_Hans: "自动检测"
+          pt_BR: "Detecção Automática"
+          ja_JP: "自動検出"
+      - value: 9100
+        label:
+          en_US: "9100 (RAW TCP/IP)"
+          zh_Hans: "9100 (RAW TCP/IP)"
+          pt_BR: "9100 (RAW TCP/IP)"
+          ja_JP: "9100 (RAW TCP/IP)"
+      - value: 631
+        label:
+          en_US: "631 (IPP)"
+          zh_Hans: "631 (IPP)"
+          pt_BR: "631 (IPP)"
+          ja_JP: "631 (IPP)"
+      - value: 515
+        label:
+          en_US: "515 (LPD)"
+          zh_Hans: "515 (LPD)"
+          pt_BR: "515 (LPD)"
+          ja_JP: "515 (LPD)"
+extra:
+  python:
+    source: tools/print_status.py
+    class: PrintStatusTool

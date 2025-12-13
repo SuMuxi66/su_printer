@@ -1,0 +1,133 @@
+# 文本打印工具
+- identity:
+    name: "print_text"
+    author: "sumuxi"
+    label:
+      en_US: "Print Text"
+      zh_Hans: "文本打印"
+      pt_BR: "Imprimir Texto"
+      ja_JP: "テキスト印刷"
+  description:
+    human:
+      en_US: "直接向网络打印机发送文本内容"
+      zh_Hans: "直接向网络打印机发送文本内容"
+      pt_BR: "Enviar conteúdo de texto diretamente para impressora de rede"
+      ja_JP: "ネットワークプリンタに直接テキストを送信"
+    llm: "向网络打印机发送文本内容进行打印"
+  parameters:
+    - name: text_content
+      type: string
+      required: true
+      label:
+        en_US: Text Content
+        zh_Hans: 文本内容
+        pt_BR: Conteúdo de Texto
+        ja_JP: テキスト内容
+      human_description:
+        en_US: "要打印的文本内容"
+        zh_Hans: "要打印的文本内容"
+        pt_BR: "Conteúdo de texto a ser impresso"
+        ja_JP: "印刷するテキスト内容"
+      llm_description: "要打印的文本内容"
+      form: llm
+    - name: printer_ip
+      type: string
+      required: true
+      label:
+        en_US: Printer IP
+        zh_Hans: 打印机IP
+        pt_BR: IP da Impressora
+        ja_JP: プリンターIP
+      human_description:
+        en_US: "网络打印机的IP地址"
+        zh_Hans: "网络打印机的IP地址"
+        pt_BR: "Endereço IP da impressora de rede"
+        ja_JP: "ネットワークプリンタのIPアドレス"
+      llm_description: "网络打印机的IP地址"
+      form: llm
+    - name: printer_port
+      type: number
+      required: true
+      label:
+        en_US: Printer Port
+        zh_Hans: 打印机端口
+        pt_BR: Porta da Impressora
+        ja_JP: プリンターポート
+      human_description:
+        en_US: "网络打印机的端口号"
+        zh_Hans: "网络打印机的端口号"
+        pt_BR: "Número da porta da impressora de rede"
+        ja_JP: "ネットワークプリンタのポート番号"
+      llm_description: "网络打印机的端口号"
+      form: llm
+  extra:
+    python:
+      source: tools/su_printer.py
+      class: PrintTextTool
+
+# URL内容打印工具
+- identity:
+    name: "print_url"
+    author: "sumuxi"
+    label:
+      en_US: "Print URL Content"
+      zh_Hans: "URL内容打印"
+      pt_BR: "Imprimir Conteúdo de URL"
+      ja_JP: "URLコンテンツ印刷"
+  description:
+    human:
+      en_US: "从URL下载内容并发送到网络打印机"
+      zh_Hans: "从URL下载内容并发送到网络打印机"
+      pt_BR: "Baixe conteúdo de URL e envie para impressora de rede"
+      ja_JP: "URLからコンテンツをダウンロードしてネットワークプリンタに送信"
+    llm: "从URL下载内容并发送到网络打印机进行打印"
+  parameters:
+    - name: url
+      type: string
+      required: true
+      label:
+        en_US: URL
+        zh_Hans: URL
+        pt_BR: URL
+        ja_JP: URL
+      human_description:
+        en_US: "要下载并打印的URL地址"
+        zh_Hans: "要下载并打印的URL地址"
+        pt_BR: "Endereço URL para download e impressão"
+        ja_JP: "ダウンロードして印刷するURLアドレス"
+      llm_description: "要下载并打印的URL地址"
+      form: llm
+    - name: printer_ip
+      type: string
+      required: true
+      label:
+        en_US: Printer IP
+        zh_Hans: 打印机IP
+        pt_BR: IP da Impressora
+        ja_JP: プリンターIP
+      human_description:
+        en_US: "网络打印机的IP地址"
+        zh_Hans: "网络打印机的IP地址"
+        pt_BR: "Endereço IP da impressora de rede"
+        ja_JP: "ネットワークプリンタのIPアドレス"
+      llm_description: "网络打印机的IP地址"
+      form: llm
+    - name: printer_port
+      type: number
+      required: true
+      label:
+        en_US: Printer Port
+        zh_Hans: 打印机端口
+        pt_BR: Porta da Impressora
+        ja_JP: プリンターポート
+      human_description:
+        en_US: "网络打印机的端口号"
+        zh_Hans: "网络打印机的端口号"
+        pt_BR: "Número da porta da impressora de rede"
+        ja_JP: "ネットワークプリンタのポート番号"
+      llm_description: "网络打印机的端口号"
+      form: llm
+  extra:
+    python:
+      source: tools/su_printer.py
+      class: PrintURLTool

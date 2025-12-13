@@ -1,0 +1,147 @@
+# URL内容打印工具
+identity:
+  name: "print_url"
+  author: "sumuxi"
+  label:
+    en_US: "Print URL Content"
+    zh_Hans: "URL内容打印"
+    pt_BR: "Imprimir Conteúdo de URL"
+    ja_JP: "URLコンテンツ印刷"
+description:
+  human:
+    en_US: "从URL下载内容并发送到网络打印机"
+    zh_Hans: "从URL下载内容并发送到网络打印机"
+    pt_BR: "Baixe conteúdo de URL e envie para impressora de rede"
+    ja_JP: "URLからコンテンツをダウンロードしてネットワークプリンタに送信"
+  llm: "从URL下载内容并发送到网络打印机进行打印"
+parameters:
+  - name: url
+    type: string
+    required: true
+    label:
+      en_US: URL
+      zh_Hans: URL
+      pt_BR: URL
+      ja_JP: URL
+    human_description:
+      en_US: "要下载并打印的URL地址"
+      zh_Hans: "要下载并打印的URL地址"
+      pt_BR: "Endereço URL para download e impressão"
+      ja_JP: "ダウンロードして印刷するURLアドレス"
+    llm_description: "要下载并打印的URL地址"
+    form: llm
+    advanced_options:
+      prefix:
+        - label: "https://"
+          value: "https://"
+        - label: "http://"
+          value: "http://"
+        - label: "ftp://"
+          value: "ftp://"
+  - name: printer_ip
+    type: string
+    required: true
+    label:
+      en_US: Printer IP
+      zh_Hans: 打印机IP
+      pt_BR: IP da Impressora
+      ja_JP: プリンターIP
+    human_description:
+      en_US: "网络打印机的IP地址"
+      zh_Hans: "网络打印机的IP地址"
+      pt_BR: "Endereço IP da impressora de rede"
+      ja_JP: "ネットワークプリンタのIPアドレス"
+    llm_description: "网络打印机的IP地址"
+    form: llm
+  - name: printer_port
+    type: select
+    required: true
+    label:
+      en_US: Printer Port
+      zh_Hans: 打印机端口
+      pt_BR: Porta da Impressora
+      ja_JP: プリンターポート
+    human_description:
+      en_US: "网络打印机的端口号"
+      zh_Hans: "网络打印机的端口号"
+      pt_BR: "Número da porta da impressora de rede"
+      ja_JP: "ネットワークプリンタのポート番号"
+    llm_description: "网络打印机的端口号"
+    form: llm
+    default: 9100
+    options:
+      - value: 9100
+        label:
+          en_US: "9100 (RAW TCP/IP)"
+          zh_Hans: "9100 (RAW TCP/IP)"
+          pt_BR: "9100 (RAW TCP/IP)"
+          ja_JP: "9100 (RAW TCP/IP)"
+      - value: 631
+        label:
+          en_US: "631 (IPP)"
+          zh_Hans: "631 (IPP)"
+          pt_BR: "631 (IPP)"
+          ja_JP: "631 (IPP)"
+      - value: 515
+        label:
+          en_US: "515 (LPD)"
+          zh_Hans: "515 (LPD)"
+          pt_BR: "515 (LPD)"
+          ja_JP: "515 (LPD)"
+  - name: copies
+    type: number
+    required: false
+    default: 1
+    label:
+      en_US: Copies
+      zh_Hans: 打印份数
+      pt_BR: Cópias
+      ja_JP: コピー数
+    human_description:
+      en_US: "打印份数，范围1-10"
+      zh_Hans: "打印份数，范围1-10"
+      pt_BR: "Número de cópias, de 1 a 10"
+      ja_JP: "コピー数、範囲1-10"
+    llm_description: "打印份数，范围1-10"
+    form: llm
+    min: 1
+    max: 10
+  - name: encoding
+    type: select
+    required: false
+    default: "utf-8"
+    label:
+      en_US: Encoding
+      zh_Hans: 编码格式
+      pt_BR: Codificação
+      ja_JP: エンコーディング
+    human_description:
+      en_US: "选择适合的编码格式，解决中文乱码问题"
+      zh_Hans: "选择适合的编码格式，解决中文乱码问题"
+      pt_BR: "Escolha o formato de codificação adequado para resolver problemas de caracteres chineses ilegíveis"
+      ja_JP: "適切なエンコーディング形式を選択して、中国語の文字化け問題を解決します"
+    llm_description: "选择适合的编码格式，解决中文乱码问题"
+    form: llm
+    options:
+      - value: "utf-8"
+        label:
+          en_US: "UTF-8"
+          zh_Hans: "UTF-8"
+          pt_BR: "UTF-8"
+          ja_JP: "UTF-8"
+      - value: "gbk"
+        label:
+          en_US: "GBK"
+          zh_Hans: "GBK"
+          pt_BR: "GBK"
+          ja_JP: "GBK"
+      - value: "ascii"
+        label:
+          en_US: "ASCII"
+          zh_Hans: "ASCII"
+          pt_BR: "ASCII"
+          ja_JP: "ASCII"
+extra:
+  python:
+    source: tools/print_url.py
+    class: PrintURLTool

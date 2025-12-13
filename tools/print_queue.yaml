@@ -1,0 +1,96 @@
+# 打印队列管理工具
+identity:
+  name: "print_queue"
+  author: "sumuxi"
+  label:
+    en_US: "Print Queue"
+    zh_Hans: "打印队列管理"
+    pt_BR: "Gerenciamento de Fila de Impressão"
+    ja_JP: "印刷キュー管理"
+description:
+  human:
+    en_US: "查看和管理打印队列，支持取消打印作业"
+    zh_Hans: "查看和管理打印队列，支持取消打印作业"
+    pt_BR: "Visualize e gerencie filas de impressão, suporte para cancelar tarefas de impressão"
+    ja_JP: "印刷キューを表示および管理し、印刷ジョブのキャンセルをサポート"
+  llm: "查看和管理打印队列，支持取消打印作业"
+parameters:
+  - name: printer_ip
+    type: string
+    required: true
+    label:
+      en_US: Printer IP
+      zh_Hans: 打印机IP
+      pt_BR: IP da Impressora
+      ja_JP: プリンターIP
+    human_description:
+      en_US: "打印机的IP地址"
+      zh_Hans: "打印机的IP地址"
+      pt_BR: "Endereço IP da impressora"
+      ja_JP: "プリンターのIPアドレス"
+    llm_description: "打印机的IP地址"
+    form: llm
+  - name: printer_port
+    type: number
+    required: false
+    label:
+      en_US: Printer Port
+      zh_Hans: 打印机端口
+      pt_BR: Porta da Impressora
+      ja_JP: プリンターポート
+    human_description:
+      en_US: "打印机的端口号，默认631（IPP端口）"
+      zh_Hans: "打印机的端口号，默认631（IPP端口）"
+      pt_BR: "Número da porta da impressora, padrão 631 (porta IPP)"
+      ja_JP: "プリンターのポート番号、デフォルトは631（IPPポート）"
+    llm_description: "打印机的端口号，默认631（IPP端口）"
+    form: llm
+    default: 631
+  - name: action
+    type: select
+    required: false
+    label:
+      en_US: Action
+      zh_Hans: 操作类型
+      pt_BR: Ação
+      ja_JP: アクション
+    human_description:
+      en_US: "要执行的操作：list（查看队列）或cancel（取消作业）"
+      zh_Hans: "要执行的操作：list（查看队列）或cancel（取消作业）"
+      pt_BR: "Ação a ser executada: list (ver fila) ou cancel (cancelar tarefa)"
+      ja_JP: "実行するアクション：list（キューを表示）またはcancel（ジョブをキャンセル）"
+    llm_description: "要执行的操作：list（查看队列）或cancel（取消作业）"
+    form: llm
+    default: "list"
+    options:
+      - value: "list"
+        label:
+          en_US: "查看队列"
+          zh_Hans: "查看队列"
+          pt_BR: "Ver Fila"
+          ja_JP: "キューを表示"
+      - value: "cancel"
+        label:
+          en_US: "取消作业"
+          zh_Hans: "取消作业"
+          pt_BR: "Cancelar Tarefa"
+          ja_JP: "ジョブをキャンセル"
+  - name: job_id
+    type: string
+    required: false
+    label:
+      en_US: Job ID
+      zh_Hans: 作业ID
+      pt_BR: ID da Tarefa
+      ja_JP: ジョブID
+    human_description:
+      en_US: "要取消的作业ID，仅当action为cancel时需要"
+      zh_Hans: "要取消的作业ID，仅当action为cancel时需要"
+      pt_BR: "ID da tarefa a ser cancelada, necessário apenas quando action for cancel"
+      ja_JP: "キャンセルするジョブID、actionがcancelの場合のみ必要"
+    llm_description: "要取消的作业ID，仅当action为cancel时需要"
+    form: llm
+extra:
+  python:
+    source: tools/print_queue.py
+    class: PrintQueueTool
