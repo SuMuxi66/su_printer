@@ -9,11 +9,11 @@ identity:
     ja_JP: "テキスト印刷"
 description:
   human:
-    en_US: "直接向网络打印机发送文本内容"
-    zh_Hans: "直接向网络打印机发送文本内容"
-    pt_BR: "Enviar conteúdo de texto diretamente para impressora de rede"
-    ja_JP: "ネットワークプリンタに直接テキストを送信"
-  llm: "向网络打印机发送文本内容进行打印"
+    en_US: "将文本转换为PCL5e格式，通过TCP 9100 RAW发送到打印机，支持中文/英文内容打印"
+    zh_Hans: "将文本转换为PCL5e格式，通过TCP 9100 RAW发送到打印机，支持中文/英文内容打印"
+    pt_BR: "Converte texto para formato PCL5e e envia para impressora via TCP 9100 RAW, suporta impressão de conteúdo em chinês/inglês"
+    ja_JP: "テキストをPCL5e形式に変換し、TCP 9100 RAWでプリンターに送信します。中国語/英語のコンテンツ印刷をサポートします"
+  llm: "将文本转换为PCL5e格式，通过TCP 9100 RAW发送到打印机，支持中文/英文内容打印"
 parameters:
   - name: text_content
     type: string

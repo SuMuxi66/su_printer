@@ -15,20 +15,67 @@ description:
     ja_JP: "文書をネイティブPDFに変換して、印刷時の文字化けを回避"
   llm: "Convert documents to PDF to avoid printing garbled characters"
 parameters:
-  - name: document_url
+  - name: document_content
     type: string
     required: true
     label:
-      en_US: "Document URL"
-      zh_Hans: "文档URL"
-      pt_BR: "URL do Documento"
-      ja_JP: "ドキュメントURL"
+      en_US: "Document or URL"
+      zh_Hans: "文档或URL"
+      pt_BR: "Documento ou URL"
+      ja_JP: "ドキュメントまたはURL"
     human_description:
-      en_US: "URL of the document to convert, supporting md, doc, docx, txt formats"
-      zh_Hans: "要转换的文档URL，支持md、doc、docx、txt格式"
-      pt_BR: "URL do documento para converter, suportando formatos md, doc, docx, txt"
-      ja_JP: "変換するドキュメントのURL、md、doc、docx、txt形式をサポート"
-    llm_description: "URL of the document to convert, supporting md, doc, docx, txt formats"
+      en_US: "Document content or URL to convert, supporting text, md, doc, docx, txt formats"
+      zh_Hans: "要转换的文档内容或URL，支持文本、md、doc、docx、txt格式"
+      pt_BR: "Conteúdo do documento ou URL para converter, suportando texto, md, doc, docx, txt formatos"
+      ja_JP: "変換するドキュメントコンテンツまたはURL、テキスト、md、doc、docx、txt形式をサポート"
+    llm_description: "Document content or URL to convert, supporting text, md, doc, docx, txt formats"
+    form: llm
+  - name: auto_print
+    type: boolean
+    required: false
+    label:
+      en_US: "Auto Print"
+      zh_Hans: "自动打印"
+      pt_BR: "Imprimir Automaticamente"
+      ja_JP: "自動印刷"
+    human_description:
+      en_US: "Whether to print the converted PDF automatically"
+      zh_Hans: "是否自动打印转换后的PDF"
+      pt_BR: "Se deve imprimir o PDF convertido automaticamente"
+      ja_JP: "変換後のPDFを自動的に印刷するかどうか"
+    llm_description: "Whether to print the converted PDF automatically"
+    default: false
+    form: llm
+  - name: printer_ip
+    type: string
+    required: false
+    label:
+      en_US: "Printer IP"
+      zh_Hans: "打印机IP"
+      pt_BR: "IP da Impressora"
+      ja_JP: "プリンターIP"
+    human_description:
+      en_US: "Printer IP address for auto printing"
+      zh_Hans: "自动打印的打印机IP地址"
+      pt_BR: "Endereço IP da impressora para impressão automática"
+      ja_JP: "自動印刷のプリンターIPアドレス"
+    llm_description: "Printer IP address for auto printing"
+    form: llm
+  - name: printer_port
+    type: number
+    required: false
+    label:
+      en_US: "Printer Port"
+      zh_Hans: "打印机端口"
+      pt_BR: "Porta da Impressora"
+      ja_JP: "プリンターポート"
+    human_description:
+      en_US: "Printer port for auto printing, default is 9100"
+      zh_Hans: "自动打印的打印机端口，默认9100"
+      pt_BR: "Porta da impressora para impressão automática, padrão é 9100"
+      ja_JP: "自動印刷のプリンターポート、デフォルトは9100"
+    llm_description: "Printer port for auto printing, default is 9100"
+    default: 9100
     form: llm
 extra:
   python:

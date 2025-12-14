@@ -2,9 +2,13 @@ from collections.abc import Generator
 from typing import Any
 import socket
 import requests
+import logging
 
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
+
+# 获取日志器
+logger = logging.getLogger(__name__)
 
 class PrintStatusTool(Tool):
     """打印机状态查询工具"""
@@ -14,32 +18,42 @@ class PrintStatusTool(Tool):
         printer_ip = tool_parameters.get("printer_ip")
         printer_port = int(tool_parameters.get("printer_port", 0))
         
+        logger.info(f"接收到打印机状态查询请求: IP={printer_ip}, 端口={printer_port}")
+        
         try:
             # 1. 验证打印机IP
             if not printer_ip:
+                logger.warning("查询失败: 打印机IP为空")
                 yield self.create_json_message({"result": "查询失败: 打印机IP为空"})
                 return
             
             # 2. 自动检测协议
             protocol = self._detect_protocol(printer_ip, printer_port)
+            logger.info(f"检测到协议: {protocol}")
             
             # 3. 查询打印机状态
             status = {}
             
             if protocol == "ipp" or printer_port == 631:
                 # 使用IPP协议查询状态
+                logger.info(f"使用IPP协议查询状态")
                 status = self._get_status_ipp(printer_ip, printer_port)
             else:
                 # 使用SNMP协议查询状态（默认）
+                logger.info(f"使用SNMP协议查询状态")
                 status = self._get_status_snmp(printer_ip)
             
             # 4. 返回状态信息
+            logger.info(f"打印机状态查询成功，状态: {status}")
             yield self.create_json_message({"result": f"打印机状态查询成功", "status": status})
         except socket.error as e:
+            logger.error(f"查询失败: 无法连接打印机 - {str(e)}")
             yield self.create_json_message({"result": f"查询失败: 无法连接打印机 - {str(e)}"})
         except ValueError as e:
+            logger.error(f"查询失败: 参数无效 - {str(e)}")
             yield self.create_json_message({"result": f"查询失败: 参数无效 - {str(e)}"})
         except Exception as e:
+            logger.exception(f"查询失败: {str(e)}")
             yield self.create_json_message({"result": f"查询失败: {str(e)}"})
     
     def _detect_protocol(self, printer_ip, printer_port):
@@ -54,8 +68,10 @@ class PrintStatusTool(Tool):
     
     def _get_status_ipp(self, printer_ip, printer_port):
         """使用IPP协议查询打印机状态"""
+        logger.info(f"使用IPP协议查询打印机状态: {printer_ip}:{printer_port}")
         # IPP状态查询URL
         ipp_url = f"http://{printer_ip}:{printer_port}/ipp/print"
+        logger.debug(f"IPP请求URL: {ipp_url}")
         
         # 构建IPP请求属性
         attributes = [
@@ -63,12 +79,14 @@ class PrintStatusTool(Tool):
             (0x48, 'attributes-natural-language', 'en-us'),  # language
             (0x45, 'printer-uri', f'ipp://{printer_ip}:{printer_port}/ipp/print'),  # printer URI
         ]
+        logger.debug(f"IPP请求属性: {attributes}")
         
         # 构建IPP请求
         ipp_data = self._build_ipp_request(
             operation_id=0x0001,  # Get-Printer-Attributes操作码
             attributes=attributes
         )
+        logger.debug(f"IPP请求数据大小: {len(ipp_data)}字节")
         
         # 发送IPP请求
         headers = {
@@ -76,13 +94,17 @@ class PrintStatusTool(Tool):
             "Host": f"{printer_ip}:{printer_port}",
             "Connection": "close"
         }
+        logger.debug(f"IPP请求头部: {headers}")
         
         response = requests.post(ipp_url, data=ipp_data, headers=headers, timeout=10)
+        logger.debug(f"IPP响应状态码: {response.status_code}")
         response.raise_for_status()
         
         # 解析IPP响应
         if response.content:
+            logger.debug(f"IPP响应数据大小: {len(response.content)}字节")
             status_code, request_id, attributes = self._parse_ipp_response(response.content)
+            logger.debug(f"IPP响应解析成功: 状态码={status_code}, 请求ID={request_id}, 属性数量={len(attributes)}")
             
             # 提取关键状态信息
             status = {
@@ -94,20 +116,26 @@ class PrintStatusTool(Tool):
             # 转换状态码为可读信息
             if status_code == 0x0000 or (0x0100 <= status_code <= 0x01ff):
                 status["status"] = "正常"
+                logger.info(f"IPP查询成功，打印机状态正常")
             elif 0x0200 <= status_code <= 0x02ff:
                 status["status"] = "警告"
+                logger.warning(f"IPP查询成功，打印机状态警告")
             else:
                 status["status"] = "错误"
+                logger.error(f"IPP查询成功，打印机状态错误")
             
             return status
         
+        logger.warning(f"IPP响应内容为空")
         return {"protocol": "ipp", "status": "未知"}
     
     def _get_status_snmp(self, printer_ip):
         """使用SNMP协议查询打印机状态"""
+        logger.info(f"使用SNMP协议查询打印机状态: {printer_ip}")
         try:
             # 尝试导入SNMP库
             from pysnmp.hlapi import getCmd, SnmpEngine, CommunityData, UdpTransportTarget, ContextData, ObjectType, ObjectIdentity
+            logger.debug("SNMP库导入成功")
             
             # 打印机状态OID映射
             oids = {
@@ -115,10 +143,12 @@ class PrintStatusTool(Tool):
                 "printer_model": "1.3.6.1.2.1.25.3.2.1.3.1",  # hrDeviceDescr
                 "toner_level": "1.3.6.1.2.1.43.11.1.1.9.1.1"  # prtMarkerSuppliesLevel
             }
+            logger.debug(f"SNMP OID映射: {oids}")
             
             status = {"protocol": "snmp", "status": "未知"}
             
             # 获取打印机基本状态
+            logger.debug("正在获取打印机基本状态...")
             errorIndication, errorStatus, errorIndex, varBinds = next(
                 getCmd(SnmpEngine(),
                        CommunityData('public', mpModel=0),
@@ -142,8 +172,12 @@ class PrintStatusTool(Tool):
                         8: "维护"
                     }
                     status["status"] = status_map.get(status_value, "未知")
+                    logger.info(f"SNMP获取打印机状态成功: {status['status']}")
+            else:
+                logger.warning(f"SNMP获取打印机状态失败: errorIndication={errorIndication}, errorStatus={errorStatus}")
             
             # 获取打印机型号
+            logger.debug("正在获取打印机型号...")
             errorIndication, errorStatus, errorIndex, varBinds = next(
                 getCmd(SnmpEngine(),
                        CommunityData('public', mpModel=0),
@@ -155,8 +189,12 @@ class PrintStatusTool(Tool):
             if not errorIndication and not errorStatus:
                 for varBind in varBinds:
                     status["model"] = str(varBind[1])
+                    logger.info(f"SNMP获取打印机型号成功: {status['model']}")
+            else:
+                logger.warning(f"SNMP获取打印机型号失败: errorIndication={errorIndication}, errorStatus={errorStatus}")
             
             # 获取墨粉余量
+            logger.debug("正在获取墨粉余量...")
             errorIndication, errorStatus, errorIndex, varBinds = next(
                 getCmd(SnmpEngine(),
                        CommunityData('public', mpModel=0),
@@ -168,28 +206,44 @@ class PrintStatusTool(Tool):
             if not errorIndication and not errorStatus:
                 for varBind in varBinds:
                     status["toner_level"] = int(varBind[1])
+                    logger.info(f"SNMP获取墨粉余量成功: {status['toner_level']}")
+            else:
+                logger.warning(f"SNMP获取墨粉余量失败: errorIndication={errorIndication}, errorStatus={errorStatus}")
             
             return status
         except ImportError:
             # 如果SNMP库不可用，使用基本的TCP连接测试
+            logger.warning("SNMP库导入失败，将使用TCP连接测试")
+            return self._get_status_tcp(printer_ip)
+        except Exception as e:
+            logger.exception(f"SNMP查询失败: {str(e)}")
             return self._get_status_tcp(printer_ip)
     
     def _get_status_tcp(self, printer_ip):
         """使用TCP连接测试打印机状态"""
+        logger.info(f"使用TCP连接测试打印机状态: {printer_ip}")
         status = {"protocol": "tcp", "status": "未知"}
         
         # 测试常用打印机端口
         ports = [9100, 631, 515]
+        logger.debug(f"将测试以下端口: {ports}")
+        
         for port in ports:
             try:
+                logger.debug(f"正在测试端口 {port}...")
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                     s.settimeout(2)
                     s.connect((printer_ip, port))
                     status["status"] = "正常"
                     status["open_port"] = port
+                    logger.info(f"TCP端口 {port} 连接成功，打印机状态正常")
                     break
             except socket.error:
+                logger.debug(f"TCP端口 {port} 连接失败")
                 continue
+        
+        if status["status"] == "未知":
+            logger.warning(f"所有测试端口都连接失败，打印机状态未知")
         
         return status
     

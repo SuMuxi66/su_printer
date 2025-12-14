@@ -7,6 +7,7 @@ yaml_files = [
     'tools/print_url.yaml',
     'tools/print_status.yaml',
     'tools/print_queue.yaml',
+    'tools/doc_to_pdf.yaml',
     'provider/su_printer.yaml',
     'manifest.yaml'
 ]
