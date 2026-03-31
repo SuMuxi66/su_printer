@@ -16,7 +16,9 @@ from .printer_utils import (
     safe_download, 
     send_raw, 
     send_ipp_print_job, 
-    send_lpd
+    send_lpd,
+    print_pdf_content,
+    add_watermark_to_pdf
 )
 
 # 获取日志器
@@ -55,32 +57,76 @@ class PrintURLTool(Tool):
             file_type = self._detect_file_type(url, content)
             logger.info(f"检测到文件类型: {file_type}")
             
-            if file_type in ['jpg', 'jpeg', 'png', 'gif', 'bmp']:
-                # 处理图片文件
-                logger.info("正在处理图片文件")
-                print_content = self._process_image(content)
-                logger.debug(f"图片处理完成，转换为ASCII文本，大小={len(print_content)}字节")
-            elif file_type == 'pdf':
-                # 处理PDF文件
-                logger.info("正在处理PDF文件")
-                print_content = self._process_pdf(content)
-                logger.debug(f"PDF处理完成，提取文本大小={len(print_content)}字节")
-            else:
-                # 作为纯文本处理
-                logger.info(f"将内容作为{file_type}类型处理")
-                print_content = content
-            
             # 获取打印份数
             copies = int(tool_parameters.get("copies", 1))
             # 获取编码格式
             encoding = tool_parameters.get("encoding", "utf-8")
-            logger.info(f"打印配置: 份数={copies}，编码={encoding}")
+            watermark = tool_parameters.get("watermark", "")
+            
+            # 高级打印选项
+            print_options = {
+                "color_mode": tool_parameters.get("color_mode", "monochrome"),
+                "page_range": tool_parameters.get("page_range", ""),
+                "duplex": tool_parameters.get("duplex", False)
+            }
+            
+            logger.info(f"打印配置: 份数={copies}，编码={encoding}，高级选项={print_options}")
             
             # 验证打印份数
             if copies < 1 or copies > 10:
                 logger.warning(f"打印失败: 打印份数必须在1-10之间，当前值={copies}")
                 yield self.create_json_message({"result": "打印失败: 打印份数必须在1-10之间"})
                 return
+            
+            if file_type in ['jpg', 'jpeg', 'png', 'gif', 'bmp']:
+                # 处理图片文件 - 直接转PDF打印，实现高清打印
+                logger.info("正在将图片处理为高清PDF格式")
+                pdf_content = self._process_image_to_pdf(content)
+                if watermark:
+                    try:
+                        pdf_content = add_watermark_to_pdf(pdf_content, watermark)
+                    except Exception as e:
+                        logger.warning(f"添加水印失败 (忽略错误): {e}")
+                
+                print_pdf_content(pdf_content, printer_ip, printer_port, copies, options=print_options)
+                
+                logger.info(f"图片高清打印成功，共{copies}份")
+                yield self.create_json_message({"result": f"图片高清打印成功，共{copies}份"})
+                return
+            elif file_type == 'pdf':
+                # 处理PDF文件 - 不再只提取文本，而是原生打印
+                logger.info("正在处理原生PDF文件")
+                pdf_content = content
+                if watermark:
+                    try:
+                        pdf_content = add_watermark_to_pdf(pdf_content, watermark)
+                    except Exception as e:
+                        logger.warning(f"添加水印失败 (忽略错误): {e}")
+                        
+                print_pdf_content(pdf_content, printer_ip, printer_port, copies, options=print_options)
+                
+                logger.info(f"PDF原生打印成功，共{copies}份")
+                yield self.create_json_message({"result": f"PDF原生打印成功，共{copies}份"})
+                return
+            elif file_type == 'html':
+                # HTML 格式交由专门的方法处理
+                logger.info("正在将HTML渲染为PDF")
+                pdf_content = self._process_html_to_pdf(content)
+                if watermark:
+                    try:
+                        pdf_content = add_watermark_to_pdf(pdf_content, watermark)
+                    except Exception as e:
+                        logger.warning(f"添加水印失败 (忽略错误): {e}")
+                        
+                print_pdf_content(pdf_content, printer_ip, printer_port, copies, options=print_options)
+                
+                logger.info(f"HTML网页渲染打印成功，共{copies}份")
+                yield self.create_json_message({"result": f"HTML网页渲染打印成功，共{copies}份"})
+                return
+            else:
+                # 作为纯文本处理
+                logger.info(f"将内容作为文本类型处理")
+                print_content = content
             
             # 6. 处理文本内容的编码
             if file_type == 'txt':
@@ -156,47 +202,66 @@ class PrintURLTool(Tool):
             return ext
         elif ext == 'pdf':
             return 'pdf'
+        elif ext in ['html', 'htm']:
+            return 'html'
         else:
             return 'txt'
     
-    def _process_image(self, content):
-        """处理图片文件"""
-        # 设置最大像素限制以防解压炸弹
-        Image.MAX_IMAGE_PIXELS = 100000000
+    def _process_image_to_pdf(self, content):
+        """将图片转换为PDF文件以供高清打印"""
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+        from reportlab.lib.utils import ImageReader
+        from PIL import Image
         
-        # 使用Pillow打开并处理图片
-        with Image.open(io.BytesIO(content)) as img:
-            # 转换为灰度图，降低打印复杂度
-            img = img.convert('L')
-            
-            # 调整图片大小，适应标准纸张
-            width, height = img.size
-            max_width = 80  # 假设打印机每行80字符
-            aspect_ratio = height / width
-            new_width = max_width
-            new_height = int(new_width * aspect_ratio)
-            img = img.resize((new_width, new_height))
-            
-            # 转换为ASCII字符
-            ascii_chars = "@%#*+=-:. "
-            pixels = img.getdata()
-            
-            # 预计算查找表以优化性能
-            lookup_table = [ascii_chars[p * len(ascii_chars) // 256] for p in range(256)]
-            ascii_str = "".join([lookup_table[pixel] for pixel in pixels])
-            
-            # 添加换行符
-            ascii_image = "\n".join([ascii_str[i:i+new_width] for i in range(0, len(ascii_str), new_width)]) + "\n"
-            
-            return ascii_image.encode('utf-8')
-    
-    def _process_pdf(self, content):
-        """处理PDF文件"""
-        # 使用PyPDF2读取PDF内容
-        pdf_reader = PdfReader(io.BytesIO(content))
-        text = ""
+        # 1. 读取图片
+        img = Image.open(io.BytesIO(content))
+        img_width, img_height = img.size
         
-        for page in pdf_reader.pages:
-            text += page.extract_text() + "\n\f"
+        # 2. 准备PDF Buffer
+        pdf_buffer = io.BytesIO()
+        c = canvas.Canvas(pdf_buffer, pagesize=A4)
+        a4_width, a4_height = A4
         
-        return text.encode('utf-8')
+        # 3. 计算缩放比例，适应A4页面并居中
+        margin = 30
+        avail_w = a4_width - 2 * margin
+        avail_h = a4_height - 2 * margin
+        
+        ratio = min(avail_w / img_width, avail_h / img_height)
+        new_width = img_width * ratio
+        new_height = img_height * ratio
+        
+        x = (a4_width - new_width) / 2
+        y = (a4_height - new_height) / 2
+        
+        # 4. 绘制并保存
+        img_reader = ImageReader(img)
+        c.drawImage(img_reader, x, y, width=new_width, height=new_height)
+        c.showPage()
+        c.save()
+        
+        return pdf_buffer.getvalue()
+        
+    def _process_html_to_pdf(self, content):
+        """将HTML内容渲染为PDF"""
+        import pypandoc
+        import tempfile
+        import os
+        
+        with tempfile.TemporaryDirectory() as tmpdir:
+            input_path = os.path.join(tmpdir, "input.html")
+            output_path = os.path.join(tmpdir, "output.pdf")
+            
+            with open(input_path, 'wb') as f:
+                f.write(content)
+                
+            pypandoc.convert_file(
+                input_path,
+                'pdf',
+                outputfile=output_path,
+                extra_args=['--pdf-engine=weasyprint']
+            )
+            
+            with open(output_path, 'rb') as f:
+                return f.read()

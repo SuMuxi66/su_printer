@@ -163,29 +163,62 @@ def send_lpd(content, printer_ip, printer_port):
             raise Exception(f"LPD数据文件发送失败: {response}")
         logger.debug("LPD数据文件发送成功")
 
-def pdf_to_pcl(pdf_path, pcl_path):
-    """将PDF转换为PCL5e格式，避免黑块问题"""
+def pdf_to_pcl(pdf_path, pcl_path, options=None):
+    """将PDF转换为PCL格式，支持高级打印选项"""
     logger.info(f"正在将PDF转换为PCL: 输入={pdf_path}, 输出={pcl_path}")
-    
+
     # 动态获取当前项目的字体绝对路径
     current_dir = os.path.dirname(os.path.abspath(__file__))
     font_path = os.path.abspath(os.path.join(current_dir, "..", "_assets", "fonts"))
+
+    gs_args = [
+        "gs",
+        "-dSAFER",
+        "-dBATCH",
+        "-dNOPAUSE",
+        "-dEmbedAllFonts=true",
+        "-dNOTRANSPARENCY",
+        f"-sFONTPATH={font_path}",
+        "-r300"
+    ]
     
+    # 高级打印选项处理
+    if options is None:
+        options = {}
+        
+    # 颜色模式
+    color_mode = options.get("color_mode", "monochrome")
+    if color_mode == "color":
+        gs_args.append("-sDEVICE=cljet5") # 彩色 PCL5c
+    else:
+        gs_args.append("-sDEVICE=ljet4")  # 黑白 PCL5e
+        
+    # 页码范围 (例如 "1-3" 或 "5")
+    page_range = options.get("page_range")
+    if page_range:
+        try:
+            if "-" in page_range:
+                start_page, end_page = page_range.split("-")
+                gs_args.append(f"-dFirstPage={int(start_page.strip())}")
+                if end_page.strip():
+                    gs_args.append(f"-dLastPage={int(end_page.strip())}")
+            else:
+                gs_args.append(f"-dFirstPage={int(page_range.strip())}")
+                gs_args.append(f"-dLastPage={int(page_range.strip())}")
+        except Exception as e:
+            logger.warning(f"解析页码范围失败 {page_range}: {e}")
+
+    # 双面打印 (部分打印机支持通过 GS 开启)
+    if options.get("duplex"):
+        gs_args.append("-dDuplex=true")
+        gs_args.append("-dTumble=false")
+
+    gs_args.append(f"-sOutputFile={pcl_path}")
+    gs_args.append(pdf_path)
+
     try:
         result = subprocess.run(
-            [
-                "gs",
-                "-dSAFER",
-                "-dBATCH",
-                "-dNOPAUSE",
-                "-dEmbedAllFonts=true",
-                "-dNOTRANSPARENCY",
-                f"-sFONTPATH={font_path}",
-                "-r300",
-                "-sDEVICE=ljet4",  # 必须使用PCL5e，Brother最稳
-                f"-sOutputFile={pcl_path}",
-                pdf_path
-            ],
+            gs_args,
             check=True,
             capture_output=True,
             text=True
@@ -197,6 +230,78 @@ def pdf_to_pcl(pdf_path, pcl_path):
     except FileNotFoundError:
         logger.error("Ghostscript未安装")
         raise Exception("Ghostscript未安装，请先安装Ghostscript。")
+
+import tempfile
+import io
+
+def add_watermark_to_pdf(pdf_content, watermark_text):
+    """为PDF内容添加文字水印"""
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import cm
+    from reportlab.lib.colors import Color
+    from PyPDF2 import PdfReader, PdfWriter
+    
+    # 1. 创建包含水印的临时PDF
+    watermark_buffer = io.BytesIO()
+    c = canvas.Canvas(watermark_buffer)
+    
+    # 简单的A4居中斜体水印
+    c.translate(10 * cm, 15 * cm)
+    c.rotate(45)
+    
+    # 支持中文，先尝试使用已注册字体，如没有则回退
+    try:
+        c.setFont("NotoSC", 60)
+    except Exception:
+        c.setFont("Helvetica-Bold", 60)
+        
+    c.setFillColor(Color(0.5, 0.5, 0.5, alpha=0.3)) # 半透明灰色
+    c.drawCentredString(0, 0, watermark_text)
+    c.save()
+    watermark_buffer.seek(0)
+    
+    # 2. 将水印叠加到原始PDF的每一页
+    watermark_pdf = PdfReader(watermark_buffer)
+    watermark_page = watermark_pdf.pages[0]
+    
+    original_pdf = PdfReader(io.BytesIO(pdf_content))
+    writer = PdfWriter()
+    
+    for page in original_pdf.pages:
+        page.merge_page(watermark_page)
+        writer.add_page(page)
+        
+    output_buffer = io.BytesIO()
+    writer.write(output_buffer)
+    
+    return output_buffer.getvalue()
+
+def print_pdf_content(pdf_content, printer_ip, printer_port, copies=1, options=None):
+    """通用的PDF打印逻辑：转换为PCL并发送到打印机"""
+    protocol = detect_protocol(printer_port)
+    logger.info(f"开始发送到打印机: 协议={protocol}, 打印机={printer_ip}:{printer_port}, 份数={copies}")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        pdf_path = os.path.join(tmpdir, "temp.pdf")
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_content)
+
+        pcl_path = os.path.join(tmpdir, "temp.pcl")
+        pdf_to_pcl(pdf_path, pcl_path, options)
+
+        with open(pcl_path, "rb") as f:
+            pcl_content = f.read()
+
+        for i in range(copies):
+            logger.info(f"发送第{i+1}/{copies}份到打印机")
+            if protocol == "raw":
+                send_raw(pcl_content, printer_ip, printer_port)
+            elif protocol == "ipp":
+                send_ipp_print_job(pcl_content, printer_ip, printer_port, content_type="application/octet-stream")
+            elif protocol == "lpd":
+                send_lpd(pcl_content, printer_ip, printer_port)
+            else:
+                send_raw(pcl_content, printer_ip, printer_port)
 
 def build_ipp_request(operation_id, attributes, data=None):
     """构建标准IPP请求"""

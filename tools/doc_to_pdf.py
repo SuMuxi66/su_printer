@@ -22,7 +22,9 @@ from .printer_utils import (
     send_raw, 
     send_ipp_print_job, 
     send_lpd,
-    pdf_to_pcl
+    pdf_to_pcl,
+    print_pdf_content,
+    add_watermark_to_pdf
 )
 
 # 获取日志器
@@ -37,6 +39,14 @@ class DocToPDFTool(Tool):
         auto_print = tool_parameters.get("auto_print", False)
         printer_ip = tool_parameters.get("printer_ip")
         printer_port = int(tool_parameters.get("printer_port", 9100))
+        watermark = tool_parameters.get("watermark", "")
+        
+        # 高级打印选项
+        print_options = {
+            "color_mode": tool_parameters.get("color_mode", "monochrome"),
+            "page_range": tool_parameters.get("page_range", ""),
+            "duplex": tool_parameters.get("duplex", False)
+        }
         
         logger.info(f"接收到文档转PDF请求: 自动打印={auto_print}, 打印机={printer_ip}:{printer_port}")
         
@@ -64,6 +74,15 @@ class DocToPDFTool(Tool):
             # 3. 转换为PDF
             logger.info(f"正在转换文档为PDF: {file_name}")
             pdf_content = self._convert_to_pdf(file_content, file_ext, file_name)
+            
+            # 添加水印
+            if watermark:
+                logger.info(f"正在添加水印: {watermark}")
+                try:
+                    pdf_content = add_watermark_to_pdf(pdf_content, watermark)
+                except Exception as e:
+                    logger.warning(f"添加水印失败 (忽略错误): {e}")
+
             logger.info(f"文档转换成功，PDF大小={len(pdf_content)}字节")
             
             # 4. 自动打印处理
@@ -75,7 +94,7 @@ class DocToPDFTool(Tool):
                 
                 # 发送打印请求
                 logger.info(f"正在自动打印PDF: 打印机={printer_ip}:{printer_port}")
-                self._send_to_printer(pdf_content, printer_ip, printer_port)
+                print_pdf_content(pdf_content, printer_ip, printer_port, options=print_options)
                 logger.info("PDF自动打印成功")
                 
                 # 5. 返回转换和打印结果
@@ -103,6 +122,9 @@ class DocToPDFTool(Tool):
         if content.startswith('# '):
             # Markdown格式
             return "document.md", ".md"
+        elif '<html' in content.lower() or '<body' in content.lower() or '<div' in content.lower():
+            # HTML格式
+            return "document.html", ".html"
         elif content.count('\t') > 5 or content.count('  ') > 5:
             # 可能是纯文本
             return "document.txt", ".txt"
@@ -145,6 +167,11 @@ class DocToPDFTool(Tool):
                 logger.info("正在将Markdown转换为PDF")
                 self._md_to_pdf(input_path, output_path)
                 logger.info("Markdown转PDF成功")
+            elif file_ext in ['.html', '.htm']:
+                # HTML to PDF
+                logger.info("正在将HTML转换为PDF")
+                self._html_to_pdf(input_path, output_path)
+                logger.info("HTML转PDF成功")
             elif file_ext in ['.doc', '.docx']:
                 # Word to PDF
                 logger.info("正在将Word文档转换为PDF")
@@ -169,6 +196,16 @@ class DocToPDFTool(Tool):
     def _md_to_pdf(self, input_path, output_path):
         """将Markdown转换为PDF"""
         # 使用pypandoc转换Markdown到PDF
+        pypandoc.convert_file(
+            input_path,
+            'pdf',
+            outputfile=output_path,
+            extra_args=['--pdf-engine=weasyprint']
+        )
+    
+    def _html_to_pdf(self, input_path, output_path):
+        """将HTML转换为PDF"""
+        # 使用pypandoc转换HTML到PDF
         pypandoc.convert_file(
             input_path,
             'pdf',
