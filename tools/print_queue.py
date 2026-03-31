@@ -6,6 +6,7 @@ import logging
 
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
+from .printer_utils import build_ipp_request, parse_ipp_response
 
 # 获取日志器
 logger = logging.getLogger(__name__)
@@ -60,93 +61,6 @@ class PrintQueueTool(Tool):
             logger.exception(f"操作失败: {str(e)}")
             yield self.create_json_message({"result": f"操作失败: {str(e)}"})
     
-    def _build_ipp_request(self, operation_id, attributes, data=None):
-        """构建标准IPP请求"""
-        # IPP版本1.1
-        version = b"\x01\x01"
-        
-        # 请求ID
-        request_id = b"\x00\x00\x00\x01"
-        
-        # 开始构建IPP数据
-        ipp_data = b""
-        ipp_data += version
-        ipp_data += operation_id.to_bytes(2, byteorder='big')
-        ipp_data += request_id
-        
-        # 添加属性组：操作属性（组标签0x01）
-        ipp_data += b"\x01"
-        
-        # 添加属性
-        for attr_type, name, value in attributes:
-            # 属性名称长度和值
-            ipp_data += attr_type.to_bytes(1, byteorder='big')
-            ipp_data += len(name).to_bytes(2, byteorder='big')
-            ipp_data += name.encode('utf-8')
-            ipp_data += len(value).to_bytes(2, byteorder='big')
-            ipp_data += value.encode('utf-8')
-        
-        # 结束属性组
-        ipp_data += b"\x03"
-        
-        # 添加数据（如果有）
-        if data:
-            ipp_data += data
-        
-        return ipp_data
-    
-    def _parse_ipp_response(self, response_data):
-        """解析IPP响应"""
-        # 跳过版本号（2字节）和状态码（2字节）
-        status_code = int.from_bytes(response_data[2:4], byteorder='big')
-        request_id = int.from_bytes(response_data[4:8], byteorder='big')
-        
-        # 解析响应数据
-        offset = 8
-        attributes = {}
-        job_attributes = []
-        current_job = {}
-        
-        while offset < len(response_data):
-            # 读取组标签
-            group_tag = response_data[offset]
-            offset += 1
-            
-            if group_tag == 0x03:  # 结束标签
-                break
-            
-            # 读取属性
-            while offset < len(response_data):
-                attr_type = response_data[offset]
-                offset += 1
-                
-                if attr_type == 0x03:  # 结束标签
-                    break
-                
-                # 读取名称长度和值
-                name_len = int.from_bytes(response_data[offset:offset+2], byteorder='big')
-                offset += 2
-                name = response_data[offset:offset+name_len].decode('utf-8')
-                offset += name_len
-                
-                value_len = int.from_bytes(response_data[offset:offset+2], byteorder='big')
-                offset += 2
-                value = response_data[offset:offset+value_len].decode('utf-8')
-                offset += value_len
-                
-                # 检查是否为作业属性组
-                if group_tag == 0x02:  # 作业属性组
-                    current_job[name] = value
-                else:
-                    attributes[name] = value
-            
-            # 如果当前作业有属性，添加到作业列表
-            if current_job:
-                job_attributes.append(current_job)
-                current_job = {}
-        
-        return status_code, request_id, attributes, job_attributes
-    
     def _get_print_queue(self, printer_ip, printer_port):
         """获取打印队列"""
         logger.info(f"开始获取打印队列: {printer_ip}:{printer_port}")
@@ -163,7 +77,7 @@ class PrintQueueTool(Tool):
         logger.debug(f"IPP请求属性: {attributes}")
         
         # 构建IPP请求
-        ipp_data = self._build_ipp_request(
+        ipp_data = build_ipp_request(
             operation_id=0x000B,  # Get-Jobs操作码
             attributes=attributes
         )
@@ -184,7 +98,7 @@ class PrintQueueTool(Tool):
         # 解析IPP响应
         if response.content:
             logger.debug(f"IPP响应数据大小: {len(response.content)}字节")
-            status_code, request_id, attributes, job_attributes = self._parse_ipp_response(response.content)
+            status_code, request_id, attributes, job_attributes = parse_ipp_response(response.content)
             logger.debug(f"IPP响应解析成功: 状态码={status_code}, 请求ID={request_id}, 作业数量={len(job_attributes)}")
             
             # 整理作业列表
@@ -232,7 +146,7 @@ class PrintQueueTool(Tool):
         logger.debug(f"IPP请求属性: {attributes}")
         
         # 构建IPP请求
-        ipp_data = self._build_ipp_request(
+        ipp_data = build_ipp_request(
             operation_id=0x0008,  # Cancel-Job操作码
             attributes=attributes
         )
@@ -253,7 +167,7 @@ class PrintQueueTool(Tool):
         # 解析IPP响应
         if response.content:
             logger.debug(f"IPP响应数据大小: {len(response.content)}字节")
-            status_code, request_id, attributes, _ = self._parse_ipp_response(response.content)
+            status_code, request_id, attributes, _ = parse_ipp_response(response.content)
             logger.debug(f"IPP响应解析成功: 状态码={status_code}, 请求ID={request_id}")
             
             # 检查操作是否成功

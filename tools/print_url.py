@@ -11,6 +11,13 @@ from PyPDF2 import PdfReader
 
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
+from .printer_utils import (
+    detect_protocol, 
+    safe_download, 
+    send_raw, 
+    send_ipp_print_job, 
+    send_lpd
+)
 
 # 获取日志器
 logger = logging.getLogger(__name__)
@@ -41,9 +48,7 @@ class PrintURLTool(Tool):
             
             # 3. 下载URL内容
             logger.info(f"正在下载URL内容: {url}")
-            response = requests.get(url, timeout=10)
-            response.raise_for_status()
-            content = response.content
+            content = safe_download(url)
             logger.info(f"URL内容下载成功，大小={len(content)}字节")
             
             # 4. 检测文件类型并处理
@@ -97,7 +102,7 @@ class PrintURLTool(Tool):
                         pass
             
             # 7. 自动检测协议
-            protocol = self._detect_protocol(printer_ip, printer_port)
+            protocol = detect_protocol(printer_port)
             logger.info(f"检测到协议: {protocol}")
             
             # 8. 发送到打印机，根据份数重复发送
@@ -105,13 +110,13 @@ class PrintURLTool(Tool):
                 logger.info(f"发送第{i+1}/{copies}份到打印机")
                 if protocol == "raw":
                     logger.debug(f"使用RAW协议发送")
-                    self._send_raw(print_content, printer_ip, printer_port)
+                    send_raw(print_content, printer_ip, printer_port)
                 elif protocol == "ipp":
                     logger.debug(f"使用IPP协议发送")
-                    self._send_ipp(print_content, printer_ip, printer_port, encoding)
+                    send_ipp_print_job(print_content, printer_ip, printer_port, content_type=f"text/plain; charset={encoding}")
                 elif protocol == "lpd":
                     logger.debug(f"使用LPD协议发送")
-                    self._send_lpd(print_content, printer_ip, printer_port)
+                    send_lpd(print_content, printer_ip, printer_port)
                 else:
                     logger.error(f"打印失败: 不支持的协议 - {protocol}")
                     yield self.create_json_message({"result": f"打印失败: 不支持的协议 - {protocol}"})
@@ -136,16 +141,6 @@ class PrintURLTool(Tool):
             logger.exception(f"打印失败: {str(e)}")
             yield self.create_json_message({"result": f"打印失败: {str(e)}"})
     
-    def _detect_protocol(self, printer_ip, printer_port):
-        """根据端口自动检测打印协议"""
-        protocol_map = {
-            9100: "raw",  # RAW TCP/IP
-            631: "ipp",   # IPP
-            515: "lpd"    # LPD
-        }
-        
-        return protocol_map.get(printer_port, "raw")
-    
     def _detect_file_type(self, url, content):
         """检测文件类型"""
         # 从URL获取文件扩展名
@@ -166,6 +161,9 @@ class PrintURLTool(Tool):
     
     def _process_image(self, content):
         """处理图片文件"""
+        # 设置最大像素限制以防解压炸弹
+        Image.MAX_IMAGE_PIXELS = 100000000
+        
         # 使用Pillow打开并处理图片
         with Image.open(io.BytesIO(content)) as img:
             # 转换为灰度图，降低打印复杂度
@@ -182,15 +180,12 @@ class PrintURLTool(Tool):
             # 转换为ASCII字符
             ascii_chars = "@%#*+=-:. "
             pixels = img.getdata()
-            ascii_str = ""
             
-            for pixel in pixels:
-                ascii_str += ascii_chars[pixel * len(ascii_chars) // 256]
+            # 使用列表推导式优化性能
+            ascii_str = "".join([ascii_chars[pixel * len(ascii_chars) // 256] for pixel in pixels])
             
             # 添加换行符
-            ascii_image = ""
-            for i in range(0, len(ascii_str), new_width):
-                ascii_image += ascii_str[i:i+new_width] + "\n"
+            ascii_image = "\n".join([ascii_str[i:i+new_width] for i in range(0, len(ascii_str), new_width)]) + "\n"
             
             return ascii_image.encode('utf-8')
     
@@ -204,124 +199,3 @@ class PrintURLTool(Tool):
             text += page.extract_text() + "\n\f"
         
         return text.encode('utf-8')
-    
-    def _send_raw(self, content, printer_ip, printer_port):
-        """使用RAW TCP/IP协议发送内容到打印机"""
-        logger.info(f"使用RAW协议发送数据到{printer_ip}:{printer_port}，数据大小={len(content)}字节")
-        # 创建TCP连接
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(10)
-            logger.debug(f"正在连接打印机{printer_ip}:{printer_port}")
-            s.connect((printer_ip, printer_port))
-            logger.debug("连接成功，正在发送数据")
-            # 发送内容
-            s.sendall(content)
-            logger.debug("数据发送完成")
-    
-    def _send_ipp(self, content, printer_ip, printer_port, encoding):
-        """使用IPP协议发送内容到打印机"""
-        logger.info(f"使用IPP协议发送数据到{printer_ip}:{printer_port}，数据大小={len(content)}字节，编码={encoding}")
-        # 简化的IPP实现，使用HTTP POST直接发送文本
-        # 这种方式对大多数打印机更兼容
-        ipp_url = f"http://{printer_ip}:{printer_port}/ipp/print"
-        logger.debug(f"IPP请求URL: {ipp_url}")
-        
-        # 检测内容类型并转换为文本
-        text_content = ""
-        if isinstance(content, bytes):
-            # 尝试解码为文本
-            try:
-                text_content = content.decode(encoding)
-                logger.debug(f"使用编码{encoding}成功解码内容")
-            except UnicodeDecodeError:
-                # 如果无法解码，使用UTF-8尝试
-                text_content = content.decode('utf-8', errors='ignore')
-                logger.warning(f"使用编码{encoding}解码失败，使用UTF-8(忽略错误)解码")
-        else:
-            text_content = str(content)
-        
-        # 使用更简单的方法发送打印请求
-        # 对于某些打印机，直接发送文本可能比完整的IPP请求更有效
-        headers = {
-            "Content-Type": "text/plain",
-            "Host": f"{printer_ip}:{printer_port}",
-            "Connection": "close"
-        }
-        
-        # 直接发送文本内容
-        logger.debug(f"正在发送IPP请求，头部：{headers}")
-        response = requests.post(ipp_url, data=text_content.encode(encoding), headers=headers, timeout=10)
-        logger.debug(f"IPP响应状态码：{response.status_code}")
-        response.raise_for_status()
-        
-        # 简化响应处理
-        if response.status_code != 200:
-            logger.error(f"IPP打印失败，状态码：{response.status_code}")
-            raise Exception(f"IPP打印失败，状态码：{response.status_code}")
-        logger.debug("IPP打印成功")
-    
-    def _send_lpd(self, content, printer_ip, printer_port):
-        """使用LPD协议发送内容到打印机"""
-        logger.info(f"使用LPD协议发送数据到{printer_ip}:{printer_port}，数据大小={len(content)}字节")
-        # LPD协议实现
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(10)
-            logger.debug(f"正在连接LPD打印机{printer_ip}:{printer_port}")
-            s.connect((printer_ip, printer_port))
-            logger.debug("LPD连接成功")
-            
-            # 1. 发送控制文件命令
-            # 控制文件命令格式：\x02queue\x00
-            control_cmd = b"\x02lp\x00"  # lp是默认队列名
-            logger.debug(f"发送LPD控制命令：{control_cmd}")
-            s.sendall(control_cmd)
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            logger.debug(f"LPD控制命令响应：{response}")
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD控制命令失败: {response}")
-            logger.debug("LPD控制命令成功")
-            
-            # 2. 发送控制文件内容
-            # 控制文件内容格式：\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
-            control_content = b"\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
-            # 发送控制文件大小和内容
-            logger.debug(f"发送LPD控制文件，大小：{len(control_content)}字节")
-            s.sendall(f"{len(control_content):04x}".encode('ascii') + b"\x0a")
-            s.sendall(control_content)
-            s.sendall(b"\x00")
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            logger.debug(f"LPD控制文件响应：{response}")
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD控制文件发送失败: {response}")
-            logger.debug("LPD控制文件发送成功")
-            
-            # 3. 发送数据文件命令
-            # 数据文件命令格式：\x03queue\x00
-            data_cmd = b"\x03lp\x00"
-            logger.debug(f"发送LPD数据命令：{data_cmd}")
-            s.sendall(data_cmd)
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            logger.debug(f"LPD数据命令响应：{response}")
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD数据命令失败: {response}")
-            logger.debug("LPD数据命令成功")
-            
-            # 4. 发送数据文件内容
-            # 发送数据文件大小和内容
-            logger.debug(f"发送LPD数据文件，大小：{len(content)}字节")
-            s.sendall(f"{len(content):04x}".encode('ascii') + b"\x0a")
-            s.sendall(content)
-            s.sendall(b"\x00")
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            logger.debug(f"LPD数据文件响应：{response}")
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD数据文件发送失败: {response}")
-            logger.debug("LPD数据文件发送成功")
