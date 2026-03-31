@@ -129,28 +129,28 @@ class PrintURLTool(Tool):
             logger.error(f"打印失败: 参数无效 - {str(e)}")
             yield self.create_json_message({"result": f"打印失败: 参数无效 - {str(e)}"})
         except socket.error as e:
-            # 确保清理临时文件
             logger.error(f"打印失败: 无法连接打印机 - {str(e)}")
             yield self.create_json_message({"result": f"打印失败: 无法连接打印机 - {str(e)}"})
         except requests.RequestException as e:
-            # 确保清理临时文件
             logger.error(f"打印失败: 下载URL内容失败 - {str(e)}")
             yield self.create_json_message({"result": f"打印失败: 下载URL内容失败 - {str(e)}"})
         except Exception as e:
-            # 确保清理临时文件
             logger.exception(f"打印失败: {str(e)}")
             yield self.create_json_message({"result": f"打印失败: {str(e)}"})
     
     def _detect_file_type(self, url, content):
         """检测文件类型"""
-        # 从URL获取文件扩展名
-        ext = url.split('.')[-1].lower()
+        import urllib.parse
+        
+        # 从URL解析出纯净的路径，去除查询参数等
+        parsed_url = urllib.parse.urlparse(url)
+        path = parsed_url.path
+        
+        # 获取扩展名
+        ext = path.split('.')[-1].lower() if '.' in path else ''
         
         # 支持的图片格式
         image_extensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp']
-        
-        # 支持的文档格式
-        document_extensions = ['pdf', 'txt']
         
         if ext in image_extensions:
             return ext
@@ -181,8 +181,9 @@ class PrintURLTool(Tool):
             ascii_chars = "@%#*+=-:. "
             pixels = img.getdata()
             
-            # 使用列表推导式优化性能
-            ascii_str = "".join([ascii_chars[pixel * len(ascii_chars) // 256] for pixel in pixels])
+            # 预计算查找表以优化性能
+            lookup_table = [ascii_chars[p * len(ascii_chars) // 256] for p in range(256)]
+            ascii_str = "".join([lookup_table[pixel] for pixel in pixels])
             
             # 添加换行符
             ascii_image = "\n".join([ascii_str[i:i+new_width] for i in range(0, len(ascii_str), new_width)]) + "\n"

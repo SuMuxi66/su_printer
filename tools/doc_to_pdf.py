@@ -112,10 +112,14 @@ class DocToPDFTool(Tool):
     
     def _download_document(self, url):
         """从URL安全下载文档"""
+        import urllib.parse
         content = safe_download(url)
         
-        # 从URL获取文件名
-        file_name = url.split('/')[-1].split('?')[0]
+        # 从URL安全地获取文件名
+        parsed_url = urllib.parse.urlparse(url)
+        path = parsed_url.path
+        file_name = os.path.basename(path)
+        
         if not file_name:
             file_name = "document"
         

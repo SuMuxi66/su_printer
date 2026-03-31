@@ -4,26 +4,53 @@ import requests
 import subprocess
 import logging
 
+import urllib.parse
+import ipaddress
+
 logger = logging.getLogger(__name__)
+
+PROTOCOL_MAP = {
+    9100: "raw",  # RAW TCP/IP
+    631: "ipp",   # IPP
+    515: "lpd"    # LPD
+}
 
 def detect_protocol(printer_port):
     """根据端口自动检测打印协议"""
-    protocol_map = {
-        9100: "raw",  # RAW TCP/IP
-        631: "ipp",   # IPP
-        515: "lpd"    # LPD
-    }
-    return protocol_map.get(printer_port, "raw")
+    return PROTOCOL_MAP.get(printer_port, "raw")
+
+def is_safe_url(url):
+    """检查URL是否安全，防止SSRF攻击"""
+    try:
+        parsed = urllib.parse.urlparse(url)
+        hostname = parsed.hostname
+        if not hostname:
+            return False
+        
+        # 解析主机名为IP
+        ip = socket.gethostbyname(hostname)
+        ip_obj = ipaddress.ip_address(ip)
+        
+        # 拦截回环地址(127.0.0.x)、链路本地地址(169.254.x.x，通常用于云提供商元数据)和组播
+        if ip_obj.is_loopback or ip_obj.is_link_local or ip_obj.is_multicast:
+            return False
+        return True
+    except Exception as e:
+        logger.warning(f"URL安全检查失败 {url}: {str(e)}")
+        return False
 
 def safe_download(url, max_size=20 * 1024 * 1024, timeout=(5, 30)):
     """
     安全下载文件，防止SSRF与OOM。
     - 限制文件最大大小（默认20MB）
     - 设置连接与传输超时
-    - 验证URL协议
+    - 验证URL协议与IP安全性
     """
     if not (url.startswith('http://') or url.startswith('https://') or url.startswith('ftp://')):
         raise ValueError(f"URL格式无效，必须以http://、https://或ftp://开头: {url}")
+        
+    if not is_safe_url(url):
+        raise ValueError(f"不安全的URL(可能存在SSRF风险): {url}")
 
     logger.info(f"正在安全下载URL内容: {url}")
     response = requests.get(url, stream=True, timeout=timeout)
