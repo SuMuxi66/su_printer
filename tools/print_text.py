@@ -16,6 +16,13 @@ from reportlab.pdfbase.ttfonts import TTFont
 
 from dify_plugin import Tool
 from dify_plugin.entities.tool import ToolInvokeMessage
+from .printer_utils import (
+    detect_protocol, 
+    pdf_to_pcl, 
+    send_raw, 
+    send_ipp_print_job, 
+    send_lpd
+)
 
 # 获取日志器
 logger = logging.getLogger(__name__)
@@ -52,33 +59,6 @@ class PrintTextTool(Tool):
         # 生成PDF
         doc.build(story)
     
-    def _pdf_to_pcl(self, pdf_path, pcl_path):
-        """将PDF转换为PCL5e格式，避免黑块问题"""
-        # 使用Ghostscript将PDF转换为PCL5e，使用Brother防黑块标准参数
-        try:
-            subprocess.run(
-                [
-                    "gs",
-                    "-dSAFER",
-                    "-dBATCH",
-                    "-dNOPAUSE",
-                    "-dEmbedAllFonts=true",
-                    "-dNOTRANSPARENCY",
-                    "-sFONTPATH=/app/assets/fonts",  # 必须使用绝对路径，Docker可访问
-                    "-r300",
-                    "-sDEVICE=ljet4",  # 必须使用PCL5e，不能用pxlmono/PCL6
-                    f"-sOutputFile={pcl_path}",
-                    pdf_path
-                ],
-                check=True,
-                capture_output=True,
-                text=True
-            )
-        except subprocess.CalledProcessError as e:
-            raise Exception(f"PDF转PCL失败: {e.stderr}")
-        except FileNotFoundError:
-            raise Exception("Ghostscript未安装，请先安装Ghostscript。安装命令: apt-get update && apt-get install -y ghostscript")
-    
     def _invoke(self, tool_parameters: dict[str, Any]) -> Generator[ToolInvokeMessage]:
         """调用打印机打印文字内容"""
         text_content = tool_parameters.get("text_content")
@@ -105,7 +85,7 @@ class PrintTextTool(Tool):
                 return
             
             # 3. 自动检测协议
-            protocol = self._detect_protocol(printer_ip, printer_port)
+            protocol = detect_protocol(printer_port)
             logger.info(f"检测到协议: {protocol}")
             
             # 4. 文本转PDF再转PCL
@@ -118,7 +98,7 @@ class PrintTextTool(Tool):
                 # 创建临时PCL文件
                 pcl_path = os.path.join(tmpdir, "temp.pcl")
                 logger.debug(f"创建临时PCL文件: {pcl_path}")
-                self._pdf_to_pcl(pdf_path, pcl_path)
+                pdf_to_pcl(pdf_path, pcl_path)
                 
                 # 读取PCL内容
                 with open(pcl_path, "rb") as f:
@@ -131,14 +111,14 @@ class PrintTextTool(Tool):
                     logger.info(f"发送第{i+1}/{copies}份到打印机")
                     if protocol == "raw":
                         logger.debug(f"使用RAW协议发送到{printer_ip}:{printer_port}")
-                        self._send_raw(pcl_content, printer_ip, printer_port)
+                        send_raw(pcl_content, printer_ip, printer_port)
                     elif protocol == "ipp":
                         logger.debug(f"使用IPP协议发送到{printer_ip}:{printer_port}")
                         # IPP协议直接发送PCL内容
-                        self._send_ipp(pcl_content, printer_ip, printer_port)
+                        send_ipp_print_job(pcl_content, printer_ip, printer_port)
                     elif protocol == "lpd":
                         logger.debug(f"使用LPD协议发送到{printer_ip}:{printer_port}")
-                        self._send_lpd(pcl_content, printer_ip, printer_port)
+                        send_lpd(pcl_content, printer_ip, printer_port)
                     else:
                         logger.error(f"打印失败: 不支持的协议 - {protocol}")
                         yield self.create_json_message({"result": f"打印失败: 不支持的协议 - {protocol}"})
@@ -155,99 +135,3 @@ class PrintTextTool(Tool):
         except Exception as e:
             logger.exception(f"打印失败: {str(e)}")
             yield self.create_json_message({"result": f"打印失败: {str(e)}"})
-    
-    def _detect_protocol(self, printer_ip, printer_port):
-        """根据端口自动检测打印协议"""
-        protocol_map = {
-            9100: "raw",  # RAW TCP/IP
-            631: "ipp",   # IPP
-            515: "lpd"    # LPD
-        }
-        
-        return protocol_map.get(printer_port, "raw")
-    
-    def _send_raw(self, content, printer_ip, printer_port):
-        """使用RAW TCP/IP协议发送内容到打印机，分块发送避免黑块或丢页"""
-        import socket
-        # 创建TCP连接
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(10)
-            s.connect((printer_ip, printer_port))
-            
-            # 分块发送，每块8192字节，避免黑块或丢页
-            chunk_size = 8192
-            for i in range(0, len(content), chunk_size):
-                s.sendall(content[i:i+chunk_size])
-    
-    def _send_ipp(self, content, printer_ip, printer_port):
-        """使用IPP协议发送内容到打印机"""
-        # 简化的IPP实现，使用HTTP POST直接发送PCL内容
-        # 这种方式对大多数打印机更兼容
-        ipp_url = f"http://{printer_ip}:{printer_port}/ipp/print"
-        
-        # 使用更简单的方法发送打印请求
-        # 对于某些打印机，直接发送PCL内容可能比完整的IPP请求更有效
-        headers = {
-            "Content-Type": "application/octet-stream",
-            "Host": f"{printer_ip}:{printer_port}",
-            "Connection": "close"
-        }
-        
-        # 直接发送PCL内容
-        response = requests.post(ipp_url, data=content, headers=headers, timeout=10)
-        response.raise_for_status()
-        
-        # 简化响应处理
-        if response.status_code != 200:
-            raise Exception(f"IPP打印失败，状态码：{response.status_code}")
-    
-    def _send_lpd(self, content, printer_ip, printer_port):
-        """使用LPD协议发送内容到打印机"""
-        # LPD协议实现
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.settimeout(10)
-            s.connect((printer_ip, printer_port))
-            
-            # 1. 发送控制文件命令
-            # 控制文件命令格式：\x02queue\x00
-            control_cmd = b"\x02lp\x00"  # lp是默认队列名
-            s.sendall(control_cmd)
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD控制命令失败: {response}")
-            
-            # 2. 发送控制文件内容
-            # 控制文件内容格式：\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
-            control_content = b"\x00\x01\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00"
-            # 发送控制文件大小和内容
-            s.sendall(f"{len(control_content):04x}".encode('ascii') + b"\x0a")
-            s.sendall(control_content)
-            s.sendall(b"\x00")
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD控制文件发送失败: {response}")
-            
-            # 3. 发送数据文件命令
-            # 数据文件命令格式：\x03queue\x00
-            data_cmd = b"\x03lp\x00"
-            s.sendall(data_cmd)
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD数据命令失败: {response}")
-            
-            # 4. 发送数据文件内容
-            # 发送数据文件大小和内容
-            s.sendall(f"{len(content):04x}".encode('ascii') + b"\x0a")
-            s.sendall(content)
-            s.sendall(b"\x00")
-            
-            # 接收服务器响应
-            response = s.recv(1024)
-            if response[0:1] != b"\x00":
-                raise Exception(f"LPD数据文件发送失败: {response}")
