@@ -1,170 +1,186 @@
-# Dify 打印机插件
+# su_printer — Network Printer Plugin for Dify
+
+**English** | [Chinese](readme/README_zh_Hans.md) | [Japanese](readme/README_ja_JP.md) | [Portuguese (BR)](readme/README_pt_BR.md)
 
 [![GitHub license](https://img.shields.io/github/license/SuMuxi66/su_printer)](https://github.com/SuMuxi66/su_printer/blob/main/LICENSE)
 [![GitHub stars](https://img.shields.io/github/stars/SuMuxi66/su_printer)](https://github.com/SuMuxi66/su_printer/stargazers)
 [![GitHub forks](https://img.shields.io/github/forks/SuMuxi66/su_printer)](https://github.com/SuMuxi66/su_printer/network)
 
-一个功能强大的Dify打印机插件，支持多种打印协议和内容类型，提供友好的用户体验。
+Print from your Dify workflows and agents to real network printers — laser printers and ESC/POS thermal receipt printers. Paste text or a document URL, pick a paper size, select a printer from an **auto-discovered dropdown**, and print.
 
-## 🌟 功能特性
+> **Docker-friendly:** every dependency is pip-installable. No Ghostscript, no system packages, no custom Dify images — install the plugin on a standard Docker-deployed Dify and it just works.
 
-### 打印功能
-- ✅ **文本直接打印**：直接向打印机发送文本内容
-- ✅ **URL内容打印**：从URL下载并打印内容
-  - 支持文本文件
-  - 支持图片（自动转换为ASCII）
-  - 支持PDF文档（提取文本）
+## ✨ Features
 
-### 协议支持
-- ✅ **RAW TCP/IP**：端口9100，适用于大多数网络打印机
-- ✅ **IPP协议**：端口631，支持现代网络打印机
-- ✅ **LPD协议**：端口515，支持传统网络打印机
-- ✅ **自动协议检测**：根据端口自动选择合适的协议
+### Two purpose-built print nodes
 
-### 管理功能
-- ✅ **打印机状态查询**：查询打印机状态、墨粉余量等信息
-- ✅ **打印队列管理**：查看和取消打印作业
+| Node | Target | Output | Paper settings |
+|------|--------|--------|----------------|
+| **Laser Printer** (`print_laser`) | PCL-compatible laser / LED printers | PCL5e raster @ 300 dpi | A4 / A5 / B5 / Letter / Legal |
+| **Thermal Printer** (`print_thermal`) | ESC/POS receipt printers (Rongta, Xprinter, Epson TM, …) | ESC/POS text & raster @ 203 dpi | 58 mm (384 dots) / 80 mm (576 dots) |
 
-### 其他特性
-- ✅ **多语言支持**：支持中文、英文、日文、葡萄牙文
-- ✅ **编码优化**：支持UTF-8、GBK、ASCII编码，解决中文乱码问题
-- ✅ **友好界面**：使用下拉菜单优化用户体验
-- ✅ **错误处理**：完善的错误提示和异常处理
+- **Paper-size-aware layout** — text is typeset to the selected paper size (or roll width) *before* rendering, so pages come out straight and centered instead of skewed or clipped.
+- **Rich content input** — plain text, or a URL (`http`/`https`) pointing to **txt / Markdown / Word (.doc, .docx) / PDF / image** files. Markdown and Word are converted to properly laid-out PDF pages; images are scaled to fit the printable area.
+- **Clear CJK printing** — a bundled Noto Sans SC font renders Chinese (and other CJK) text crisply on both laser and thermal output. No more garbled characters.
+- **Copies** — print 1–10 copies in one call.
 
-## 🛠️ 技术栈
+### Auto-discovered printer dropdown
 
-- **开发语言**：Python 3.12+
-- **Dify SDK**：dify-plugin>=0.4.0
-- **网络请求**：requests>=2.31.0
-- **图片处理**：Pillow>=10.0.0
-- **PDF处理**：PyPDF2>=3.0.0
-- **SNMP支持**：pysnmp>=5.0.0
+The **Printer IP** field is a dynamic dropdown. When you open a print node, the plugin scans your LAN for hosts with port **9100** open (the standard RAW printing port) and lists every printer it finds — no typing IP addresses.
 
-## 📦 安装方法
+- Concurrent scan (128 workers), up to 1024 addresses, ~1–2 s for a /24, results cached for 30 s.
+- Hostnames are resolved and shown as labels when available.
+- Printers that don't answer the scan can be added permanently via **Manual Printer IPs** in plugin settings.
 
-### 从Dify插件市场安装
-1. 登录Dify平台
-2. 进入插件管理页面
-3. 搜索"su_printer"并安装
+### Protocol support (laser node)
 
-### 本地安装
-1. 下载插件包：`su_printer.difypkg`
-2. 登录Dify平台
-3. 进入插件管理页面
-4. 点击"上传插件"，选择下载的插件包
+| Port | Protocol | Notes |
+|------|----------|-------|
+| 9100 | RAW TCP/IP | Default for most network printers |
+| 631 | IPP | Modern network printers / CUPS |
+| 515 | LPD | Legacy network printers |
 
-## 🚀 使用指南
+The protocol is detected automatically from the selected port. Thermal printers use RAW TCP (9100).
 
-### 文本打印
+### Management tools
 
-1. 选择"文本打印"工具
-2. 填写打印机IP地址
-3. 选择打印机端口
-4. 输入要打印的文本内容
-5. 选择合适的编码格式
-6. 点击"执行"开始打印
+- **Print Status** (`print_status`) — query printer state and toner/supply levels via SNMP.
+- **Print Queue** (`print_queue`) — list or cancel print jobs via IPP.
 
-### URL内容打印
+## 📦 Installation
 
-1. 选择"URL内容打印"工具
-2. 填写打印机IP地址
-3. 选择打印机端口
-4. 输入要打印的URL
-5. 选择合适的编码格式
-6. 点击"执行"开始打印
+### From the Dify Marketplace
 
-### 打印机状态查询
+1. Open your Dify workspace → **Plugins**.
+2. Search for **su_printer** and click **Install**.
 
-1. 选择"查询打印机状态"工具
-2. 填写打印机IP地址
-3. 选择打印机端口（可选，默认自动检测）
-4. 点击"执行"查询状态
+### From a local package
 
-### 打印队列管理
+1. Download `su_printer.difypkg` from [Releases](https://github.com/SuMuxi66/su_printer/releases) (or build it yourself, see below).
+2. Dify → **Plugins** → **Install plugin** → **Local package file** → upload the `.difypkg`.
 
-1. 选择"打印队列管理"工具
-2. 填写打印机IP地址
-3. 选择打印机端口
-4. 选择操作类型：
-   - "查看队列"：查看当前打印队列
-   - "取消作业"：取消指定的打印作业
-5. 如需取消作业，填写作业ID
-6. 点击"执行"执行操作
+All Python dependencies are installed automatically into the plugin's isolated environment by the Dify plugin daemon.
 
-## ⚙️ 配置说明
+> **Docker networking note:** the plugin runs inside the `plugin_daemon` container. Make sure that container can reach your printers' LAN (on Linux hosts, `network_mode: host` for the plugin daemon, or proper routing between the Docker network and the printer subnet, works well).
 
-### 端口与协议对应关系
-| 端口 | 协议类型 | 描述 |
-|------|---------|------|
-| 9100 | RAW TCP/IP | 大多数网络打印机默认端口 |
-| 631 | IPP | 现代网络打印机支持的协议 |
-| 515 | LPD | 传统网络打印机支持的协议 |
+## ⚙️ Configuration
 
-### 编码选择建议
-| 编码 | 适用场景 |
-|------|---------|
-| UTF-8 | 通用编码，支持多种语言 |
-| GBK | 适用于中文环境，特别是Brother打印机 |
-| ASCII | 仅适用于英文文本 |
+Requires **Dify ≥ 1.5.1** (the version that introduced dynamic-select plugin parameters). No third-party API keys or tokens are needed — the two settings below are stored as encrypted plugin credentials by Dify itself.
 
-## 🔧 开发与贡献
+Open **Plugins → su_printer → Settings** and configure:
 
-### 开发环境搭建
+| Setting | Required | Default | Description |
+|---------|----------|---------|-------------|
+| **Scan Subnet** | yes | `192.168.1.0/24` | LAN subnet scanned for printers (port 9100). Max 1024 addresses. Set this to your actual subnet. |
+| **Manual Printer IPs** | no | — | Comma-separated IPs (e.g. `192.168.1.201,192.168.1.202`) that always appear in the dropdown, for printers the scan can't find. |
 
-1. 克隆仓库：
-   ```bash
-   git clone https://github.com/SuMuxi66/su_printer.git
-   cd su_printer
-   ```
+## 🚀 Usage
 
-2. 安装依赖：
-   ```bash
-   pip install -r requirements.txt
-   ```
+### Laser printing
 
-3. 打包插件：
-   ```bash
-   dify plugin package .
-   ```
+1. Add the **Laser Printer** node to your workflow (or let an agent call it).
+2. **Print Content**: enter text, or a URL to a txt/Markdown/Word/PDF/image file.
+3. **Paper Size**: A4 / A5 / B5 / Letter / Legal — layout adapts automatically.
+4. **Printer IP**: pick from the auto-discovered dropdown.
+5. **Printer Port**: 9100 (RAW) / 631 (IPP) / 515 (LPD).
+6. **Copies**: 1–10. Run.
 
-### 代码结构
+### Thermal (receipt) printing
+
+1. Add the **Thermal Printer** node.
+2. **Print Content**: text or a document/image URL.
+3. **Paper Width**: 58 mm or 80 mm — text wraps and images scale to the roll width.
+4. **Printer IP**: pick from the dropdown. **Port**: usually 9100.
+5. **Copies**: 1–10. Run.
+
+### Status & queue
+
+- **Print Status**: enter the printer IP (port optional, auto-detected) to read state and supply levels.
+- **Print Queue**: enter the printer IP and IPP port (default 631), choose *list* or *cancel*; for cancel, provide the job ID.
+
+## 🧱 How it works
+
+```
+content (text / URL)
+   │  fetch & detect type (txt · md · doc/docx · pdf · image)
+   ▼
+paper-aware PDF layout ── reportlab + bundled Noto Sans SC (text/images)
+   │                      pypandoc (bundled pandoc) + WeasyPrint (md/Word)
+   ▼
+rasterize ── pypdfium2 (pure-wheel PDF renderer, no Ghostscript)
+   │
+   ├─ laser:   PCL5e @300 dpi, paper-size command (ESC&l#A) → RAW / IPP / LPD
+   └─ thermal: ESC/POS @203 dpi, GBK text or GS v 0 raster → RAW 9100
+```
+
+Everything ships as pip wheels or bundled assets, which is why the plugin installs cleanly on Docker-deployed Dify with no host-level prerequisites.
+
+## 🔧 Development
+
+Requirements: Python **3.12**, [Dify plugin CLI](https://docs.dify.ai/plugin-dev-en/0312-publish-to-dify-marketplace).
+
+```bash
+git clone https://github.com/SuMuxi66/su_printer.git
+cd su_printer
+pip install -r requirements.txt
+
+# package into su_printer.difypkg
+dify plugin package .
+```
+
+### Project structure
 
 ```
 su_printer/
-├── _assets/              # 插件资源文件
-├── docs/                 # 文档
-├── provider/             # 插件提供者配置
-├── tools/                # 工具定义
-│   ├── print_text.py     # 文本打印工具
-│   ├── print_url.py      # URL内容打印工具
-│   ├── print_status.py   # 打印机状态查询工具
-│   └── print_queue.py    # 打印队列管理工具
-├── main.py               # 插件入口
-├── manifest.yaml         # 插件元信息
-└── requirements.txt      # 依赖列表
+├── _assets/                  # icons & bundled Noto Sans SC font
+├── provider/
+│   ├── su_printer.yaml       # provider config & credential schema (scan subnet, manual IPs)
+│   └── su_printer.py         # credential validation
+├── tools/
+│   ├── print_laser.py/.yaml      # laser node (PCL, paper sizes)
+│   ├── print_thermal.py/.yaml    # thermal node (ESC/POS, roll widths)
+│   ├── print_status.py/.yaml     # SNMP status query
+│   ├── print_queue.py/.yaml      # IPP queue list/cancel
+│   ├── printer_discovery.py      # LAN scan → dynamic dropdown options
+│   ├── printer_utils.py          # protocols, PCL & ESC/POS encoding
+│   └── content_utils.py          # fetch/convert content → paper-aware PDF
+├── main.py                   # plugin entrypoint
+├── manifest.yaml             # plugin metadata
+└── requirements.txt          # pip-only dependencies
 ```
 
-### 贡献指南
+### Key dependencies
 
-1. Fork本仓库
-2. 创建特性分支：`git checkout -b feature/AmazingFeature`
-3. 提交更改：`git commit -m 'Add some AmazingFeature'`
-4. 推送到分支：`git push origin feature/AmazingFeature`
-5. 打开Pull Request
+| Package | Purpose |
+|---------|---------|
+| `dify_plugin ==0.10.2` | Plugin SDK (0.10+ required for dynamic-select on tool-only providers) |
+| `pypdfium2` | PDF rasterization — pure wheel, replaces Ghostscript |
+| `pypandoc-binary` | Markdown/Word → HTML/PDF — bundled pandoc binary |
+| `weasyprint` | HTML → PDF with `@page` paper-size CSS |
+| `reportlab` | Text/image → PDF layout |
+| `Pillow` | Image processing & dithering |
+| `pysnmp` | Printer status / supply levels |
+| `requests` | URL content download |
 
-## 📄 许可证
+## 🤝 Contributing
 
-本项目采用MIT许可证 - 查看[LICENSE](LICENSE)文件了解详情
+1. Fork the repository.
+2. Create a feature branch: `git switch -c feat/my-change`.
+3. Commit your changes: `git commit -m 'Add my change'`.
+4. Push: `git push origin feat/my-change`.
+5. Open a Pull Request.
 
-## 📞 联系方式
+Issues and printer-compatibility reports are welcome — please include your printer model and protocol.
+
+## 📄 License
+
+MIT — see [LICENSE](LICENSE) for details.
+
+## 📞 Contact
 
 - GitHub: [@SuMuxi66](https://github.com/SuMuxi66)
-- 项目链接: [https://github.com/SuMuxi66/su_printer](https://github.com/SuMuxi66/su_printer)
-
-## 🙏 致谢
-
-感谢所有为本项目做出贡献的开发者和用户！
+- Project: <https://github.com/SuMuxi66/su_printer>
 
 ---
 
-**享受打印的乐趣！** 🎉
+**Happy printing!** 🖨️

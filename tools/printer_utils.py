@@ -1,8 +1,10 @@
-import os
+import io
 import socket
+import time
 import requests
-import subprocess
 import logging
+import pypdfium2 as pdfium
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -136,40 +138,58 @@ def send_lpd(content, printer_ip, printer_port):
             raise Exception(f"LPD数据文件发送失败: {response}")
         logger.debug("LPD数据文件发送成功")
 
-def pdf_to_pcl(pdf_path, pcl_path):
-    """将PDF转换为PCL5e格式，避免黑块问题"""
+PCL_PAPER_CODES = {"A4": 26, "A5": 25, "B5": 27, "Letter": 2, "Legal": 3}
+
+
+def pdf_to_pcl(pdf_path, pcl_path, paper_code=26):
+    """将PDF渲染为300dpi单色位图并封装为PCL5e光栅指令，纸张指令随paper_code变化"""
     logger.info(f"正在将PDF转换为PCL: 输入={pdf_path}, 输出={pcl_path}")
-    
-    # 动态获取当前项目的字体绝对路径
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    font_path = os.path.abspath(os.path.join(current_dir, "..", "_assets", "fonts"))
-    
+
+    # PCL光栅中1表示黑点，与PIL mode "1"（0=黑）相反，用translate表反转
+    invert = bytes(255 - i for i in range(256))
+    dpi = 300
+
     try:
-        result = subprocess.run(
-            [
-                "gs",
-                "-dSAFER",
-                "-dBATCH",
-                "-dNOPAUSE",
-                "-dEmbedAllFonts=true",
-                "-dNOTRANSPARENCY",
-                f"-sFONTPATH={font_path}",
-                "-r300",
-                "-sDEVICE=ljet4",  # 必须使用PCL5e，Brother最稳
-                f"-sOutputFile={pcl_path}",
-                pdf_path
-            ],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        logger.debug(f"Ghostscript执行成功: {result.stdout}")
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Ghostscript执行失败: {e.stderr}")
-        raise Exception(f"PDF转PCL失败: {e.stderr}")
-    except FileNotFoundError:
-        logger.error("Ghostscript未安装")
-        raise Exception("Ghostscript未安装，请先安装Ghostscript。")
+        pdf = pdfium.PdfDocument(pdf_path)
+    except Exception as e:
+        logger.error(f"PDF打开失败: {e}")
+        raise Exception(f"PDF转PCL失败: 无法打开PDF文件 {e}")
+
+    try:
+        with open(pcl_path, "wb") as out:
+            out.write(b"\x1bE")        # 复位打印机
+            out.write(b"\x1b&l" + str(paper_code).encode("ascii") + b"A")  # 纸张尺寸
+            out.write(b"\x1b&l0O")     # 纵向
+            out.write(b"\x1b*t300R")   # 300dpi光栅分辨率
+
+            for page_index, page in enumerate(pdf):
+                bitmap = page.render(scale=dpi / 72)
+                img = bitmap.to_pil().convert("L").convert("1")
+                bitmap.close()
+                width, height = img.size
+                row_bytes = (width + 7) // 8
+                pad = row_bytes * 8 - width
+                mask = (0xFF << pad) & 0xFF if pad else 0xFF
+                raw = img.tobytes()
+
+                out.write(b"\x1b*r1A")  # 从当前光标位置开始光栅
+                out.write(b"\x1b*b0M")  # 不压缩编码
+                for y in range(height):
+                    row = raw[y * row_bytes:(y + 1) * row_bytes].translate(invert)
+                    if pad:
+                        row = row[:-1] + bytes([row[-1] & mask])
+                    out.write(b"\x1b*b" + str(row_bytes).encode("ascii") + b"W" + row)
+                out.write(b"\x1b*rB")   # 结束光栅
+                out.write(b"\x0c")      # 换页
+                logger.debug(f"已渲染第{page_index + 1}页: {width}x{height}")
+
+            out.write(b"\x1bE")
+        logger.info("PDF转PCL完成")
+    except Exception as e:
+        logger.error(f"PDF转PCL失败: {e}")
+        raise Exception(f"PDF转PCL失败: {e}")
+    finally:
+        pdf.close()
 
 def build_ipp_request(operation_id, attributes, data=None):
     """构建标准IPP请求"""
@@ -243,3 +263,90 @@ def parse_ipp_response(response_data):
             current_job = {}
             
     return status_code, request_id, attributes, job_attributes
+
+
+ESCPOS_WIDTH = 576  # 80mm热敏纸 @203dpi 的可打印宽度（点数）
+
+
+def _send_stream(printer_ip, printer_port, data, chunk_size=4096, delay=0.05):
+    """热敏打印机缓冲区小，分块限速发送避免溢出断连"""
+    logger.info(f"分块发送ESC/POS数据到{printer_ip}:{printer_port}，大小={len(data)}字节")
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(5)
+        s.connect((printer_ip, printer_port))
+        s.settimeout(60)
+        for i in range(0, len(data), chunk_size):
+            s.sendall(data[i:i + chunk_size])
+            time.sleep(delay)
+
+
+def _wrap_escpos_line(line, width_dots):
+    """按纸宽点数换行：CJK按24点、ASCII按12点（203dpi标准字体）"""
+    lines, cur, w = [], "", 0
+    for ch in line:
+        cw = 24 if ord(ch) > 0x7F else 12
+        if cur and w + cw > width_dots:
+            lines.append(cur)
+            cur, w = "", 0
+        cur += ch
+        w += cw
+    lines.append(cur)
+    return lines
+
+
+def send_escpos_text(content, printer_ip, printer_port, width_dots=ESCPOS_WIDTH):
+    """热敏打印机文本直发，中文走GBK码页，按纸宽自动换行"""
+    data = b"\x1b@"      # 初始化
+    data += b"\x1c&"     # 启用中文模式
+    for line in content.split("\n"):
+        for wrapped in _wrap_escpos_line(line, width_dots):
+            data += wrapped.encode("gbk", errors="replace") + b"\n"
+    data += b"\x1bd\x04"  # 走纸4行
+    _send_stream(printer_ip, printer_port, data)
+
+
+def _image_to_escpos_rows(img, width=ESCPOS_WIDTH):
+    if img.width != width:
+        new_height = max(1, int(img.height * width / img.width))
+        img = img.resize((width, new_height), Image.LANCZOS)
+    img = img.convert("L").convert("1")
+    row_bytes = (width + 7) // 8
+    raw = img.tobytes()
+    invert = bytes(255 - i for i in range(256))
+    rows = [raw[y * row_bytes:(y + 1) * row_bytes].translate(invert) for y in range(img.height)]
+    return rows, row_bytes
+
+
+def _rows_to_escpos(rows, row_bytes):
+    """GS v 0 光栅指令，每256行一块"""
+    out = b"\x1b@"
+    for i in range(0, len(rows), 256):
+        chunk = rows[i:i + 256]
+        out += (b"\x1dv0\x00" + row_bytes.to_bytes(2, "little")
+                + len(chunk).to_bytes(2, "little") + b"".join(chunk))
+    out += b"\x1bd\x04"
+    return out
+
+
+def image_to_escpos(content, printer_ip, printer_port, width=ESCPOS_WIDTH):
+    """图片字节流按纸宽渲染为ESC/POS光栅并发送"""
+    with Image.open(io.BytesIO(content)) as img:
+        rows, row_bytes = _image_to_escpos_rows(img, width)
+    _send_stream(printer_ip, printer_port, _rows_to_escpos(rows, row_bytes))
+
+
+def pdf_to_escpos(pdf_path, printer_ip, printer_port, width=ESCPOS_WIDTH):
+    """PDF渲染为203dpi、按纸宽缩放的ESC/POS光栅并发送"""
+    logger.info(f"正在将PDF转换为ESC/POS光栅: {pdf_path}, 宽度={width}")
+    pdf = pdfium.PdfDocument(pdf_path)
+    try:
+        out = b""
+        for page in pdf:
+            bitmap = page.render(scale=203 / 72)
+            img = bitmap.to_pil()
+            bitmap.close()
+            rows, row_bytes = _image_to_escpos_rows(img, width)
+            out += _rows_to_escpos(rows, row_bytes)
+        _send_stream(printer_ip, printer_port, out)
+    finally:
+        pdf.close()

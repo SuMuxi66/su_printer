@@ -7,10 +7,10 @@ identity:
     pt_BR: "su_printer"
     ja_JP: "su_printer"
   description:
-    en_US: "向网络打印机发送打印请求"
-    zh_Hans: "向网络打印机发送打印请求"
-    pt_BR: "向网络打印机发送打印请求"
-    ja_JP: "向网络打印机发送打印请求"
+    en_US: "Send print jobs to network laser and thermal printers"
+    zh_Hans: "向网络激光与热敏打印机发送打印任务"
+    pt_BR: "Envie trabalhos de impressão para impressoras de rede laser e térmicas"
+    ja_JP: "ネットワークレーザー／サーマルプリンターへ印刷ジョブを送信"
   icon: "icon.svg"
 
 #########################################################################################
@@ -55,12 +55,38 @@ identity:
 #         zh_Hans: "Access Token"
 #         en_US: "Access Token"
 
+credentials_for_provider:
+  scan_subnet:
+    type: text-input
+    required: true
+    default: "192.168.1.0/24"
+    label:
+      en_US: "Scan Subnet"
+      zh_Hans: "扫描网段"
+    placeholder:
+      en_US: "e.g. 192.168.1.0/24"
+      zh_Hans: "例如 192.168.1.0/24"
+    help:
+      en_US: "LAN subnet to scan for printers (port 9100). Max 1024 addresses."
+      zh_Hans: "自动搜索打印机的局域网网段（扫描9100端口），最多1024个地址"
+  manual_ips:
+    type: text-input
+    required: false
+    label:
+      en_US: "Manual Printer IPs"
+      zh_Hans: "手动补充IP"
+    placeholder:
+      en_US: "e.g. 192.168.1.201,192.168.1.202"
+      zh_Hans: "例如 192.168.1.201,192.168.1.202"
+    help:
+      en_US: "Comma-separated IPs always shown in the dropdown, for printers not found by scan."
+      zh_Hans: "逗号分隔的IP，始终出现在下拉中，用于扫描不到的打印机"
+
 tools:
-  - tools/print_text.yaml
-  - tools/print_url.yaml
+  - tools/print_laser.yaml
+  - tools/print_thermal.yaml
   - tools/print_status.yaml
   - tools/print_queue.yaml
-  - tools/doc_to_pdf.yaml
 extra:
   python:
     source: provider/su_printer.py

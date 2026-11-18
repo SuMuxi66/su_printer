@@ -1,4 +1,4 @@
-version: 0.0.1
+version: 0.0.5
 type: plugin
 author: sumuxi
 name: su_printer
@@ -8,10 +8,10 @@ label:
   zh_Hans: su_printer
   pt_BR: su_printer
 description:
-  en_US: 向网络打印机发送打印请求
-  ja_JP: 向网络打印机发送打印请求
-  zh_Hans: 向网络打印机发送打印请求
-  pt_BR: 向网络打印机发送打印请求
+  en_US: "Print to network laser and ESC/POS thermal printers from Dify, with paper-size-aware layout and an auto-discovered printer IP dropdown."
+  ja_JP: "Dify からネットワークレーザープリンターと ESC/POS サーマルプリンターへ印刷。用紙サイズ対応レイアウトとプリンター IP 自動検索ドロップダウン付き。"
+  zh_Hans: "在 Dify 中打印到网络激光与 ESC/POS 热敏打印机，排版随纸张自适应，打印机IP自动搜索下拉选择。"
+  pt_BR: "Imprima do Dify em impressoras laser e térmicas ESC/POS de rede, com layout adaptado ao papel e descoberta automática de IPs de impressoras."
 icon: icon.svg
 icon_dark: icon-dark.svg
 resource:
@@ -29,7 +29,9 @@ meta:
     language: python
     version: "3.12"
     entrypoint: main
-  minimum_dify_version: null
+  minimum_dify_version: "1.5.1"
 created_at: 2025-12-13T05:41:35.055943459Z
 privacy: PRIVACY.md
+repo: https://github.com/SuMuxi66/su_printer
+contact: 96619914+SuMuxi66@users.noreply.github.com
 verified: false

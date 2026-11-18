@@ -1,0 +1,110 @@
+identity:
+  name: "print_laser"
+  author: "sumuxi"
+  label:
+    en_US: "Laser Printer"
+    zh_Hans: "激光打印机"
+description:
+  human:
+    en_US: "Print text or URL content (txt/Markdown/Word/PDF/image) on a laser printer. Layout adapts to the selected paper size, output as PCL raster."
+    zh_Hans: "将文本或URL内容（txt/Markdown/Word/PDF/图片）打印到激光打印机，排版随所选纸张尺寸自适应，输出PCL光栅，中文清晰不歪斜"
+  llm: "Print text or URL content on a laser printer with paper-size-aware layout (A4/A5/B5/Letter/Legal), PCL raster output."
+parameters:
+  - name: content
+    type: string
+    required: true
+    label:
+      en_US: Print Content
+      zh_Hans: 打印内容
+    human_description:
+      en_US: "Text to print, or a URL (http/https) pointing to txt/Markdown/Word/PDF/image"
+      zh_Hans: "要打印的文本，或指向txt/Markdown/Word/PDF/图片文件的URL（http/https开头）"
+    llm_description: "Text to print, or a URL pointing to a txt/md/doc/docx/pdf/image file"
+    form: llm
+  - name: paper_size
+    type: select
+    required: true
+    default: "A4"
+    label:
+      en_US: Paper Size
+      zh_Hans: 纸张大小
+    human_description:
+      en_US: "Paper size; text layout and PCL page command follow this setting"
+      zh_Hans: "纸张大小，文字排版与打印机页面指令随此设置自适应，避免打印歪斜"
+    llm_description: "Paper size for layout: A4, A5, B5, Letter, Legal"
+    form: llm
+    options:
+      - value: "A4"
+        label:
+          en_US: "A4"
+          zh_Hans: "A4"
+      - value: "A5"
+        label:
+          en_US: "A5"
+          zh_Hans: "A5"
+      - value: "B5"
+        label:
+          en_US: "B5"
+          zh_Hans: "B5"
+      - value: "Letter"
+        label:
+          en_US: "Letter"
+          zh_Hans: "Letter（信纸）"
+      - value: "Legal"
+        label:
+          en_US: "Legal"
+          zh_Hans: "Legal"
+  - name: printer_ip
+    type: dynamic-select
+    required: true
+    label:
+      en_US: Printer IP
+      zh_Hans: 打印机IP
+    human_description:
+      en_US: "Auto-discovers printers on the LAN (scans port 9100). Configure scan subnet in plugin settings."
+      zh_Hans: "自动搜索局域网内的打印机（扫描9100端口），下拉选择；扫描网段在插件设置中配置"
+    llm_description: "IP address of the network laser printer, auto-discovered from the LAN"
+    form: llm
+  - name: printer_port
+    type: select
+    required: true
+    default: 9100
+    label:
+      en_US: Printer Port
+      zh_Hans: 打印机端口
+    human_description:
+      en_US: "Printer port; protocol is detected automatically"
+      zh_Hans: "打印机端口，协议自动识别"
+    llm_description: "Printer port: 9100 RAW, 631 IPP, 515 LPD"
+    form: llm
+    options:
+      - value: 9100
+        label:
+          en_US: "9100 (RAW TCP/IP)"
+          zh_Hans: "9100 (RAW TCP/IP)"
+      - value: 631
+        label:
+          en_US: "631 (IPP)"
+          zh_Hans: "631 (IPP)"
+      - value: 515
+        label:
+          en_US: "515 (LPD)"
+          zh_Hans: "515 (LPD)"
+  - name: copies
+    type: number
+    required: false
+    default: 1
+    label:
+      en_US: Copies
+      zh_Hans: 打印份数
+    human_description:
+      en_US: "Number of copies, 1-10"
+      zh_Hans: "打印份数，范围1-10"
+    llm_description: "Number of copies, 1-10"
+    form: llm
+    min: 1
+    max: 10
+extra:
+  python:
+    source: tools/print_laser.py
+    class: PrintLaserTool

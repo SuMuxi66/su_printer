@@ -3,11 +3,10 @@ import os
 
 # 要检查的YAML文件列表
 yaml_files = [
-    'tools/print_text.yaml',
-    'tools/print_url.yaml',
+    'tools/print_laser.yaml',
+    'tools/print_thermal.yaml',
     'tools/print_status.yaml',
     'tools/print_queue.yaml',
-    'tools/doc_to_pdf.yaml',
     'provider/su_printer.yaml',
     'manifest.yaml'
 ]

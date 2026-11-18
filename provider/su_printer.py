@@ -1,18 +1,18 @@
 from typing import Any
+import ipaddress
 
 from dify_plugin import ToolProvider
 from dify_plugin.errors.tool import ToolProviderCredentialValidationError
 
 
 class SuPrinterProvider(ToolProvider):
-    
+
     def _validate_credentials(self, credentials: dict[str, Any]) -> None:
         try:
-            """
-            IMPLEMENT YOUR VALIDATION HERE
-            """
+            subnet = credentials.get("scan_subnet") or "192.168.1.0/24"
+            ipaddress.ip_network(subnet, strict=False)
         except Exception as e:
-            raise ToolProviderCredentialValidationError(str(e))
+            raise ToolProviderCredentialValidationError(f"扫描网段格式无效: {e}")
 
     #########################################################################################
     # If OAuth is supported, uncomment the following functions.

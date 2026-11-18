@@ -1,0 +1,85 @@
+identity:
+  name: "print_thermal"
+  author: "sumuxi"
+  label:
+    en_US: "Thermal Printer"
+    zh_Hans: "热敏打印机"
+description:
+  human:
+    en_US: "Print text or URL content (txt/Markdown/Word/PDF/image) on an ESC/POS thermal receipt printer. Text wraps and images scale to the selected paper width (58mm/80mm)."
+    zh_Hans: "将文本或URL内容（txt/Markdown/Word/PDF/图片）打印到ESC/POS热敏票据打印机，文本按纸宽自动换行、图片按纸宽缩放，中文清晰不歪斜"
+  llm: "Print text or URL content on an ESC/POS thermal receipt printer with paper-width-aware layout (58mm/80mm)."
+parameters:
+  - name: content
+    type: string
+    required: true
+    label:
+      en_US: Print Content
+      zh_Hans: 打印内容
+    human_description:
+      en_US: "Text to print, or a URL (http/https) pointing to txt/Markdown/Word/PDF/image"
+      zh_Hans: "要打印的文本，或指向txt/Markdown/Word/PDF/图片文件的URL（http/https开头）"
+    llm_description: "Text to print, or a URL pointing to a txt/md/doc/docx/pdf/image file"
+    form: llm
+  - name: paper_width
+    type: select
+    required: true
+    default: "80mm"
+    label:
+      en_US: Paper Width
+      zh_Hans: 纸张宽度
+    human_description:
+      en_US: "Thermal paper width; text wrapping and image scaling follow this setting"
+      zh_Hans: "热敏纸宽度，文本换行与图片缩放随此设置自适应，避免打印歪斜"
+    llm_description: "Thermal paper width: 58mm (384 dots) or 80mm (576 dots)"
+    form: llm
+    options:
+      - value: "58mm"
+        label:
+          en_US: "58mm"
+          zh_Hans: "58mm"
+      - value: "80mm"
+        label:
+          en_US: "80mm"
+          zh_Hans: "80mm"
+  - name: printer_ip
+    type: dynamic-select
+    required: true
+    label:
+      en_US: Printer IP
+      zh_Hans: 打印机IP
+    human_description:
+      en_US: "Auto-discovers printers on the LAN (scans port 9100). Configure scan subnet in plugin settings."
+      zh_Hans: "自动搜索局域网内的打印机（扫描9100端口），下拉选择；扫描网段在插件设置中配置"
+    llm_description: "IP address of the network thermal printer, auto-discovered from the LAN"
+    form: llm
+  - name: printer_port
+    type: number
+    required: false
+    default: 9100
+    label:
+      en_US: Printer Port
+      zh_Hans: 打印机端口
+    human_description:
+      en_US: "Thermal printers use RAW TCP port 9100"
+      zh_Hans: "热敏打印机使用RAW TCP端口9100"
+    llm_description: "RAW TCP port, usually 9100"
+    form: llm
+  - name: copies
+    type: number
+    required: false
+    default: 1
+    label:
+      en_US: Copies
+      zh_Hans: 打印份数
+    human_description:
+      en_US: "Number of copies, 1-10"
+      zh_Hans: "打印份数，范围1-10"
+    llm_description: "Number of copies, 1-10"
+    form: llm
+    min: 1
+    max: 10
+extra:
+  python:
+    source: tools/print_thermal.py
+    class: PrintThermalTool
